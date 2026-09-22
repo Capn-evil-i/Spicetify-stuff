@@ -79,7 +79,7 @@ export const DEFAULTS: Config = {
     },
     tvMode: false,
     locale: "en-US",
-    fsHideOriginal: false,
+    fsHideOriginal: true,
     autoLaunch: "never",
     activationTypes: "both",
     buttonActivation: "both",
