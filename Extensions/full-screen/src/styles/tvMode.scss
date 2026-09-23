@@ -108,9 +108,10 @@
 
     #fsd-status.active,
     #fsd-progress-parent {
-        max-height: 80px;
+        interpolate-size: allow-keywords;
+        height: auto;
         transition:
-            max-height 0.4s var(--transition-function),
+            height 0.4s var(--transition-function),
             margin 0.4s var(--transition-function);
     }
 
@@ -118,12 +119,12 @@
     &.controls-collapsed {
         #fsd-status.active,
         #fsd-progress-parent {
-            max-height: 0;
+            height: 0;
             margin: 0;
             overflow: hidden;
             transition:
-                max-height 0.4s var(--transition-function) 0.3s,
-                margin 0.4s var(--transition-function) 0.3s;
+                height 0.4s var(--transition-function) 0.6s,
+                margin 0.4s var(--transition-function) 0.6s;
         }
     }
 }
