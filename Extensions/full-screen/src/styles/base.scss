@@ -339,6 +339,25 @@
         .lyrics-config-button {
             margin-right: 20px;
         }
+
+        .lyrics-lyricsContainer-LyricsLine {
+            text-shadow: none;
+        }
+
+        .lyrics-lyricsContainer-SyncedLyrics .lyrics-lyricsContainer-LyricsLine {
+            transition-property: transform, color, opacity, text-shadow !important;
+        }
+
+        .lyrics-lyricsContainer-Karaoke-Word {
+            transition: var(--word-duration) color ease,
+                var(--word-duration) text-shadow ease !important;
+            text-shadow: none;
+        }
+
+        .lyrics-lyricsContainer-Karaoke-WordActive,
+        .lyrics-lyricsContainer-SyncedLyrics .lyrics-lyricsContainer-LyricsLine-active {
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+        }
     }
 
     &.lyrics-unavailable,
