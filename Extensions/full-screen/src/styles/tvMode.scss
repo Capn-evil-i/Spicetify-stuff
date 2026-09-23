@@ -105,4 +105,24 @@
             margin: 10px 0;
         }
     }
+
+    #fsd-status.active,
+    #fsd-progress-parent {
+        max-height: 80px;
+        transition:
+            max-height 0.4s var(--transition-function),
+            margin 0.4s var(--transition-function);
+    }
+
+    // Once every auto-hidden row has faded out, drop its space so the details settle at the bottom.
+    &.controls-collapsed {
+        #fsd-status.active,
+        #fsd-progress-parent {
+            max-height: 0;
+            margin: 0;
+            transition:
+                max-height 0.4s var(--transition-function) 0.3s,
+                margin 0.4s var(--transition-function) 0.3s;
+        }
+    }
 }

@@ -397,9 +397,23 @@ async function main() {
         if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControls();
     }
 
+    const controlsObserver = new MutationObserver(updateControlsCollapsed);
+
+    function updateControlsCollapsed() {
+        const rows = DOM.container.querySelectorAll<HTMLElement>(".fsd-controls, #fsd-progress-container");
+        const allHidden = rows.length > 0 && Array.from(rows).every((row) => row.style.opacity === "0");
+        DOM.container.classList.toggle("controls-collapsed", allHidden);
+    }
+
     function handleMouseMoveActivation() {
         DOM.container.addEventListener("mousemove", hideCursor);
         hideCursor();
+
+        controlsObserver.observe(DOM.container.querySelector("#fsd-foreground")!, {
+            attributes: true,
+            attributeFilter: ["style"],
+            subtree: true,
+        });
 
         const statusEl = DOM.container.querySelector<HTMLElement>("#fsd-status");
         statusEl?.addEventListener("mouseenter", onStatusEnter);
@@ -424,6 +438,8 @@ async function main() {
     }
 
     function handleMouseMoveDeactivation() {
+        controlsObserver.disconnect();
+        DOM.container.classList.remove("controls-collapsed");
         DOM.container.removeEventListener("mousemove", hideCursor);
         DOM.container.removeEventListener("mousemove", Context.hideContext.bind(Context));
         DOM.container.removeEventListener("mousemove", ExtraControls.hideExtraControls.bind(ExtraControls));
