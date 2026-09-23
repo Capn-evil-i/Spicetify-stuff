@@ -270,6 +270,7 @@ export class ConfigManager {
                 translations[LOCALE].settings.lyricsDescription.join("<br>"),
             ),
             this.createToggle(translations[LOCALE].settings.autoHideLyrics, "autoHideLyrics"),
+            this.createToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),
             this.createOptions(
                 translations[LOCALE].settings.lyricsAlignment.setting,
                 {

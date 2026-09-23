@@ -92,6 +92,7 @@ async function main() {
 
     function render() {
         DOM.container.classList.toggle("lyrics-active", Boolean(CFM.get("lyricsDisplay")));
+        DOM.container.classList.toggle("glow-lyrics", Boolean(CFM.get("glowLyrics")));
         Utils.toggleQueuePanel(DOM.queue, false);
         DOM.container.classList.toggle(
             "vertical-mode",

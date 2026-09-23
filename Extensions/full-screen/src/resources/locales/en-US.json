@@ -71,6 +71,7 @@
             "right": "Right"
         },
         "autoHideLyrics": "Auto Hide Lyrics (when unavailable)",
+        "glowLyrics": "Glowing Lyrics",
         "lyricsAnimationTempo": "Lyrics Animation Tempo",
 
         "generalHeader": "General Settings",
