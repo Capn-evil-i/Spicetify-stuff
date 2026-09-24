@@ -71,7 +71,13 @@
             "right": "Right"
         },
         "autoHideLyrics": "Auto Hide Lyrics (when unavailable)",
+        "glowHeader": "Glow Effects",
         "glowLyrics": "Glowing Lyrics",
+        "glowTitle": "Glowing Song Title",
+        "glowDetails": "Glowing Track Info (Artist & Album)",
+        "glowProgressBar": "Glowing Progress Bar",
+        "glowControls": "Glowing Player Controls",
+        "glowArt": "Glowing Album Artwork",
         "lyricsAnimationTempo": "Lyrics Animation Tempo",
 
         "generalHeader": "General Settings",

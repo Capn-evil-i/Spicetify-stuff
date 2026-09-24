@@ -93,6 +93,11 @@ async function main() {
     function render() {
         DOM.container.classList.toggle("lyrics-active", Boolean(CFM.get("lyricsDisplay")));
         DOM.container.classList.toggle("glow-lyrics", Boolean(CFM.get("glowLyrics")));
+        DOM.container.classList.toggle("glow-title", Boolean(CFM.get("glowTitle")));
+        DOM.container.classList.toggle("glow-details", Boolean(CFM.get("glowDetails")));
+        DOM.container.classList.toggle("glow-progress", Boolean(CFM.get("glowProgressBar")));
+        DOM.container.classList.toggle("glow-controls", Boolean(CFM.get("glowControls")));
+        DOM.container.classList.toggle("glow-art", Boolean(CFM.get("glowArt")));
         Utils.toggleQueuePanel(DOM.queue, false);
         DOM.container.classList.toggle(
             "vertical-mode",

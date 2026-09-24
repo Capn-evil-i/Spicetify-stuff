@@ -15,6 +15,11 @@ export type Settings = {
     lyricsAlignment: "right" | "left" | "center";
     autoHideLyrics: boolean;
     glowLyrics: boolean;
+    glowTitle: boolean;
+    glowDetails: boolean;
+    glowProgressBar: boolean;
+    glowControls: boolean;
+    glowArt: boolean;
     animationTempo: number;
     progressBarDisplay: "never" | "mousemove" | "always";
     playerControls: "never" | "mousemove" | "always";

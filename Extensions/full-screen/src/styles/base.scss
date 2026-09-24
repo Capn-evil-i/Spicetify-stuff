@@ -390,6 +390,92 @@
         }
     }
 
+    // Customizable Element Glow Effects
+    &.glow-title #fsd-title {
+        text-shadow: 0 0 16px rgba(255, 255, 255, 0.65), 0 0 32px var(--primary-color, rgba(255, 255, 255, 0.4));
+        transition: text-shadow 0.3s ease;
+    }
+    &:not(.glow-title) #fsd-title {
+        text-shadow: none !important;
+    }
+
+    &.glow-details {
+        #fsd-artist,
+        #fsd-album {
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.5), 0 0 24px var(--secondary-color, rgba(255, 255, 255, 0.3));
+            transition: text-shadow 0.3s ease;
+        }
+    }
+    &:not(.glow-details) {
+        #fsd-artist,
+        #fsd-album {
+            text-shadow: none !important;
+        }
+    }
+
+    &.glow-progress {
+        #fsd-progress-parent {
+            .progress-bar__slider,
+            .playback-progressbar-isInteractive .progress-bar__slider {
+                box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 20px var(--theme-main-color, #1db954) !important;
+            }
+            .x-progressBar-fillColor,
+            .progress-bar__fg,
+            [data-testid="progress-bar-indicator"] {
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px var(--theme-main-color, #1db954) !important;
+            }
+            #fsd-elapsed,
+            #fsd-duration {
+                text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+            }
+        }
+    }
+    &:not(.glow-progress) {
+        #fsd-progress-parent {
+            .progress-bar__slider,
+            .x-progressBar-fillColor,
+            .progress-bar__fg {
+                box-shadow: none !important;
+            }
+            #fsd-elapsed,
+            #fsd-duration {
+                text-shadow: none !important;
+            }
+        }
+    }
+
+    &.glow-controls {
+        .fsd-controls button,
+        #fsd-status button {
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
+            transition: filter 0.25s ease;
+        }
+    }
+    &:not(.glow-controls) {
+        .fsd-controls button,
+        #fsd-status button {
+            filter: none !important;
+        }
+    }
+
+    &.glow-art {
+        #fsd-art-inner {
+            box-shadow: 0 0 24px rgba(255, 255, 255, 0.35), 0 8px 36px var(--primary-color, rgba(0, 0, 0, 0.7)) !important;
+            transition: box-shadow 0.3s ease;
+        }
+        #fsd-art-image {
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.25) !important;
+        }
+    }
+    &:not(.glow-art) {
+        #fsd-art-inner {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+        }
+        #fsd-art-image {
+            box-shadow: none !important;
+        }
+    }
+
     &.lyrics-unavailable,
     &.lyrics-hide-force {
         #fad-lyrics-plus-container {

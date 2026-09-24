@@ -270,7 +270,6 @@ export class ConfigManager {
                 translations[LOCALE].settings.lyricsDescription.join("<br>"),
             ),
             this.createToggle(translations[LOCALE].settings.autoHideLyrics, "autoHideLyrics"),
-            this.createToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),
             this.createOptions(
                 translations[LOCALE].settings.lyricsAlignment.setting,
                 {
@@ -282,6 +281,13 @@ export class ConfigManager {
                 "lyricsAlignment",
                 (value: string) => this.saveOption("lyricsAlignment", value),
             ),
+            headerText(translations[LOCALE].settings.glowHeader),
+            this.createToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),
+            this.createToggle(translations[LOCALE].settings.glowTitle, "glowTitle"),
+            this.createToggle(translations[LOCALE].settings.glowDetails, "glowDetails"),
+            this.createToggle(translations[LOCALE].settings.glowProgressBar, "glowProgressBar"),
+            this.createToggle(translations[LOCALE].settings.glowControls, "glowControls"),
+            this.createToggle(translations[LOCALE].settings.glowArt, "glowArt"),
             headerText(translations[LOCALE].settings.generalHeader),
             this.createOptions(
                 translations[LOCALE].settings.progressBar,
