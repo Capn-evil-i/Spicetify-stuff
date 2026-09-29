@@ -12,35 +12,34 @@ const htmlCreator = readFileSync(join(root, 'src', 'services', 'html-creator.ts'
 const baseStyles = readFileSync(join(root, 'src', 'styles', 'base.scss'), 'utf8');
 const tvStyles = readFileSync(join(root, 'src', 'styles', 'tvMode.scss'), 'utf8');
 
-test('perspective strength sets the curve and compact layouts keep a gentler one', () => {
+test('perspective strength sets the fisheye and compact layouts keep a gentler one', () => {
   assert.match(helper, /clamp\(Number\(value\) \|\| 0, 0, 100\)/);
   assert.match(helper, /window\.innerWidth <= 800 \? 0\.55 : 1/);
-  assert.match(helper, /const MAX_BEND = /);
+  assert.match(helper, /const MAX_WARP = /);
   assert.match(app, /setHudPerspectiveStrength\(DOM\.container, Number\(CFM\.get\("hudPerspectiveStrength"\)\)\)/);
   assert.match(config, /input\.oninput = \(\) =>[\s\S]*?setHudPerspectiveStrength\(DOM\.container, strength\)/);
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
 });
 
-test('the curve keeps the edges and squeezes the middle, moving pieces instead of resampling text', () => {
-  // scale(x) = 1 - bend * (1 - u^2): 1 at the edges (u = +-1), smallest in the middle.
-  assert.match(helper, /const scale = 1 - bend \* \(1 - u \* u\);/);
-  assert.match(helper, /dy: \(y - cy\) \* \(scale - 1\),/);
-  assert.match(helper, /piece\.style\.translate = /);
-  assert.match(helper, /write\(word, dy - inherited, slope\)/);
-  assert.match(helper, /piece\.style\.rotate = /);
-  assert.doesNotMatch(helper, /piece\.style\.scale = /, 'pieces keep their size');
-  // Text is split into words that each follow the curve, and joined again when the curve is off.
+test('the fisheye is horizontal only, smooth, and keeps the edges', () => {
+  // g(u) = u(1 + k) / (1 + k u^2): g(+-1) = +-1, centre magnified by 1 + k, no seam at u = 0.
+  assert.match(helper, /return cx \+ \(cx \* u \* \(1 \+ warp\)\) \/ \(1 \+ warp \* u \* u\);/);
+  assert.match(helper, /piece\.style\.translate = `\$\{shift\.toFixed\(1\)\}px 0`/);
+  assert.match(helper, /piece\.style\.scale = `\$\{stretch\.toFixed\(3\)\} 1`/);
+  assert.doesNotMatch(helper, /style\.rotate/, 'nothing is tilted');
+  assert.doesNotMatch(helper, /px 0 \$\{|translate = `0 /, 'nothing moves vertically');
+  // Words are split so each can take its own slice of the curve, and joined again when it is off.
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
   assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;/);
-  // The flat HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
+  // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
-  assert.doesNotMatch(tvStyles, /--fsd-hud-yaw|hud-curve/);
   assert.doesNotMatch(tvStyles, /\.hud-perspective\s*\{[\s\S]*?#fsd-overview-card\s*\{\s*left: auto;/, 'the clock card stays where it is');
 });
 
-test('only the blurred background is bent as an image, and it can be turned off', () => {
+test('only the blurred background is warped as an image, and it can be turned off', () => {
   assert.match(helper, /feDisplacementMap/);
+  assert.match(helper, /xChannelSelector="R"/);
   assert.match(helper, /CFM\.get\("hudPerspectiveBackground"\)/);
   assert.match(helper, /#fsd-background/);
 });

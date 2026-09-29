@@ -378,6 +378,11 @@
         transition-property: fill, color, opacity, width, height, margin;
     }
 
+    // The clock card also animates every property; keep its own show/hide animation only.
+    #fsd-overview-card {
+        transition-property: transform, opacity, background-color;
+    }
+
     #fsd-ctx-details,
     #fsd-title > span,
     #fsd-artist > span,
