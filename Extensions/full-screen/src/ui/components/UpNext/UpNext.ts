@@ -39,27 +39,33 @@ export class UpNext {
         }
         const next_image = metadata.image_xlarge_url;
         const upnextImage = new Image();
+        let imageUrl: string;
         if (next_image) {
-            upnextImage.src = next_image;
+            imageUrl = next_image;
         } else {
-            if (metadata.image_url) upnextImage.src = metadata.image_url;
-            else {
-                upnextImage.src = ICONS.OFFLINE_SVG;
-            }
+            imageUrl = metadata.image_url || ICONS.OFFLINE_SVG;
         }
         return new Promise<void>((resolve) => {
-            upnextImage.onload = () => {
-                DOM.fsd_nextCover.style.backgroundImage = `url("${upnextImage.src}")`;
+            let settled = false;
+            const setImage = (url: string) => {
+                if (settled) return;
+                settled = true;
+                Utils.fadeBackgroundImage(DOM.fsd_nextCover, url);
                 DOM.fsd_first_span.innerText = songName + "  •  " + next_artist;
                 DOM.fsd_second_span.innerText = songName + "  •  " + next_artist;
                 resolve();
+            };
+            upnextImage.onload = () => {
+                setImage(upnextImage.src);
             };
             upnextImage.onerror = () => {
-                DOM.fsd_nextCover.style.backgroundImage = `url("${ICONS.OFFLINE_SVG}")`;
-                DOM.fsd_first_span.innerText = songName + "  •  " + next_artist;
-                DOM.fsd_second_span.innerText = songName + "  •  " + next_artist;
-                resolve();
+                setImage(ICONS.OFFLINE_SVG);
             };
+            upnextImage.src = imageUrl;
+            if (upnextImage.complete) {
+                if (upnextImage.naturalWidth) setImage(upnextImage.src);
+                else setImage(ICONS.OFFLINE_SVG);
+            }
         });
     }
 
@@ -91,7 +97,7 @@ export class UpNext {
     }
 
     static showUpNext() {
-        DOM.fsd_myUp.style.transform = "translateX(0px)";
+        DOM.fsd_myUp.classList.add("upnext-visible");
         this.upNextShown = true;
         if (DOM.fsd_second_span.offsetWidth > DOM.fsd_next_tit_art.offsetWidth - 2) {
             this.setupScrollingAnimation();
@@ -102,7 +108,7 @@ export class UpNext {
 
     static hideUpNext() {
         this.upNextShown = false;
-        DOM.fsd_myUp.style.transform = "translateX(750px)";
+        DOM.fsd_myUp.classList.remove("upnext-visible");
         this.resetUpNextAnimation();
     }
 
@@ -139,12 +145,12 @@ export class UpNext {
                     clearTimeout(this.upnextTimer);
                 }
                 if (timetogo < 10) {
-                    if (!this.upNextShown || DOM.fsd_myUp.style.transform !== "translateX(0px)") {
+                    if (!this.upNextShown || !DOM.fsd_myUp.classList.contains("upnext-visible")) {
                         this.updateUpNext();
                     }
                     this.upNextShown = true;
                 } else {
-                    DOM.fsd_myUp.style.transform = "translateX(750px)";
+                    DOM.fsd_myUp.classList.remove("upnext-visible");
                     this.upNextShown = false;
                     if (Spicetify.Player.isPlaying()) {
                         this.upnextTimer = setTimeout(() => {

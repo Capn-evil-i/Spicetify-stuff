@@ -22,6 +22,17 @@
     --theme-background-color: rgba(175, 175, 175, 0.6);
     --theme-hover-color: rgba(175, 175, 175, 0.3);
     --theme-main-color: rgba(var(--theme-color), 1);
+    --fsd-glow-highlight: rgba(255, 255, 255, 0.95);
+    --fsd-glow-color: rgba(var(--main-color), 0.55);
+
+    // Keep the artwork canvas full bleed while the complete foreground HUD warps as one plane.
+    #fsd-hud-layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        transform-style: flat;
+    }
 
     &.themed-buttons {
         --theme-background-color: rgba(var(--theme-color), 0.6);
@@ -260,6 +271,9 @@
         z-index: 50;
         transition: transform 0.75s ease-in-out;
         transform: translateX(750px);
+        &.upnext-visible {
+            transform: translateX(0px);
+        }
     }
 
     #fsd_next_art_image {
@@ -364,25 +378,31 @@
             transition-property: transform, opacity, box-shadow;
         }
 
+        .rzOQhNuCNTsDR8rE8ss1.dPaa_Hg0z0Ql_UBrV9uZ,
         .lyrics-lyricsContainer-Karaoke-WordActive,
         .lyrics-lyricsContainer-SyncedLyrics .lyrics-lyricsContainer-LyricsLine-active,
         .lyrics-lyricsContainer-UnsyncedLyricsPage:has(> .lyrics-idling-indicator) > .lyrics-lyricsContainer-LyricsLine-active {
-            text-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+            text-shadow:
+                0 0 3px var(--fsd-glow-highlight),
+                0 0 12px var(--fsd-glow-color) !important;
         }
 
         // The idling dots are boxes rather than text, so they carry the same glow as a box-shadow.
         // !important because themes such as Bloom strip every box-shadow with * { box-shadow: none !important }.
         .lyrics-idling-indicator__circle.active {
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.6) !important;
+            box-shadow:
+                0 0 3px var(--fsd-glow-highlight),
+                0 0 12px var(--fsd-glow-color) !important;
         }
     }
 
     // Themes such as Bloom add the same glow globally, so "off" has to override it.
     &:not(.glow-lyrics) #fad-lyrics-plus-container {
+        .rzOQhNuCNTsDR8rE8ss1.dPaa_Hg0z0Ql_UBrV9uZ,
         .lyrics-lyricsContainer-Karaoke-WordActive,
         .lyrics-lyricsContainer-SyncedLyrics .lyrics-lyricsContainer-LyricsLine-active,
         .lyrics-lyricsContainer-UnsyncedLyricsPage .lyrics-lyricsContainer-LyricsLine-active {
-            text-shadow: none;
+            text-shadow: none !important;
         }
 
         .lyrics-idling-indicator__circle.active {
@@ -392,8 +412,16 @@
 
     // Customizable Element Glow Effects
     &.glow-title #fsd-title {
-        text-shadow: 0 0 16px rgba(255, 255, 255, 0.65), 0 0 32px var(--primary-color, rgba(255, 255, 255, 0.4));
+        text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
         transition: text-shadow 0.3s ease;
+    }
+    // In TV mode the title's inner span uses line clamping. Render its glow
+    // after that clipping step so the halo can extend past the text box.
+    &[mode="tv"].glow-title #fsd-title {
+        text-shadow: none;
+        filter: drop-shadow(0 0 3px var(--fsd-glow-highlight))
+            drop-shadow(0 0 12px var(--fsd-glow-color));
+        transition: filter 0.3s ease;
     }
     &:not(.glow-title) #fsd-title {
         text-shadow: none !important;
@@ -402,14 +430,48 @@
     &.glow-details {
         #fsd-artist,
         #fsd-album {
-            text-shadow: 0 0 12px rgba(255, 255, 255, 0.5), 0 0 24px var(--secondary-color, rgba(255, 255, 255, 0.3));
+            text-shadow:
+                0 0 3px var(--fsd-glow-highlight),
+                0 0 12px var(--fsd-glow-color);
             transition: text-shadow 0.3s ease;
+        }
+
+        #fsd-ctx-details {
+            text-shadow:
+                0 0 3px var(--fsd-glow-highlight),
+                0 0 12px var(--fsd-glow-color);
+            transition: text-shadow 0.3s ease;
+        }
+
+        #fsd-ctx-icon {
+            filter:
+                drop-shadow(0 0 3px var(--fsd-glow-highlight))
+                drop-shadow(0 0 12px var(--fsd-glow-color));
+            transition: filter 0.3s ease;
+        }
+    }
+    // The metadata spans and context details are clipped for line wrapping.
+    // A filter on their outer elements keeps the text bounds while drawing
+    // the halo beyond those bounds.
+    &[mode="tv"].glow-details {
+        #fsd-artist,
+        #fsd-album,
+        #fsd-ctx-details {
+            text-shadow: none;
+            filter: drop-shadow(0 0 3px var(--fsd-glow-highlight))
+                drop-shadow(0 0 12px var(--fsd-glow-color));
+            transition: filter 0.3s ease;
         }
     }
     &:not(.glow-details) {
         #fsd-artist,
-        #fsd-album {
+        #fsd-album,
+        #fsd-ctx-details {
             text-shadow: none !important;
+        }
+
+        #fsd-ctx-icon {
+            filter: none !important;
         }
     }
 
@@ -417,16 +479,26 @@
         #fsd-progress-parent {
             .progress-bar__slider,
             .playback-progressbar-isInteractive .progress-bar__slider {
-                box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 20px var(--theme-main-color, #1db954) !important;
+                box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
             }
             .x-progressBar-fillColor,
             .progress-bar__fg,
             [data-testid="progress-bar-indicator"] {
-                box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px var(--theme-main-color, #1db954) !important;
+                box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
+            }
+            #fsd-progress-bar-inner {
+                box-shadow:
+                    0 0 3px var(--fsd-glow-highlight),
+                    0 0 12px var(--fsd-glow-color) !important;
+            }
+            #progress-thumb {
+                box-shadow:
+                    0 0 3px var(--fsd-glow-highlight),
+                    0 0 12px var(--fsd-glow-color) !important;
             }
             #fsd-elapsed,
             #fsd-duration {
-                text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+                text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
             }
         }
     }
@@ -434,7 +506,9 @@
         #fsd-progress-parent {
             .progress-bar__slider,
             .x-progressBar-fillColor,
-            .progress-bar__fg {
+            .progress-bar__fg,
+            #fsd-progress-bar-inner,
+            #progress-thumb {
                 box-shadow: none !important;
             }
             #fsd-elapsed,
@@ -445,26 +519,60 @@
     }
 
     &.glow-controls {
-        .fsd-controls button,
-        #fsd-status button {
-            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
-            transition: filter 0.25s ease;
+        --fsd-control-glow: drop-shadow(0 0 3px var(--fsd-glow-highlight)) drop-shadow(0 0 12px var(--fsd-glow-color));
+
+        #fsd-volume {
+            text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
+        }
+
+        #fsd-volume-bar {
+            // Bloom's global `* { box-shadow: none !important; }` reset otherwise
+            // strips this narrow control even though the volume label still glows.
+            box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
+        }
+
+        #fsd-volume-bar-inner,
+        #volume-thumb {
+            box-shadow:
+                0 0 3px var(--fsd-glow-highlight),
+                0 0 12px var(--fsd-glow-color) !important;
+        }
+
+        #fsd-time-display {
+            text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
         }
     }
     &:not(.glow-controls) {
-        .fsd-controls button,
-        #fsd-status button {
-            filter: none !important;
+        --fsd-control-glow: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+
+        #fsd-volume,
+        #fsd-time-display {
+            text-shadow: none !important;
         }
+
+        #fsd-volume-bar,
+        #fsd-volume-bar-inner,
+        #volume-thumb {
+            box-shadow: none !important;
+        }
+    }
+
+    .fsd-controls button,
+    #fsd-status button,
+    #fsd-volume-icon,
+    #fsd-overview-pin-button,
+    #fsd-overview-button-container button {
+        filter: var(--fsd-control-glow);
+        transition: filter 0.25s ease;
     }
 
     &.glow-art {
         #fsd-art-inner {
-            box-shadow: 0 0 24px rgba(255, 255, 255, 0.35), 0 8px 36px var(--primary-color, rgba(0, 0, 0, 0.7)) !important;
-            transition: box-shadow 0.3s ease;
+            box-shadow: none !important;
         }
         #fsd-art-image {
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.25) !important;
+            box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
+            transition: box-shadow 0.3s ease;
         }
     }
     &:not(.glow-art) {
@@ -567,13 +675,13 @@
 
         &:hover {
             transform: scale(1.08) translateZ(0);
-            filter: saturate(1.5) contrast(1.5) !important;
+            filter: saturate(1.5) contrast(1.5) var(--fsd-control-glow, drop-shadow(0 0 0 transparent)) !important;
             background: var(--theme-hover-color);
         }
 
         &.button-active {
             background: var(--theme-background-color) !important;
-            filter: saturate(1.5) contrast(1.5) !important;
+            filter: saturate(1.5) contrast(1.5) var(--fsd-control-glow, drop-shadow(0 0 0 transparent)) !important;
         }
     }
 
@@ -592,8 +700,33 @@
     }
 
     .fsd-background-fade {
-        transition: background-image var(--fs-transition) linear;
+        position: relative;
+        overflow: hidden;
     }
+
+    .fsd-background-fade-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        border-radius: inherit;
+        background-position: center;
+        background-size: cover;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--fs-transition, 0.4s) ease;
+    }
+
+    .fsd-background-fade-layer.fsd-background-fade-visible {
+        opacity: 1;
+    }
+}
+
+// Keep the final Spotify content row scrollable above the fixed mini-player.
+.Root__main-view main::after {
+    content: "";
+    display: block;
+    height: clamp(56px, 8vh, 96px);
+    pointer-events: none;
 }
 
 html.spotify__container--is-desktop body.fsd-activated,

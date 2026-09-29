@@ -10,7 +10,7 @@ function setup(t, html = '') {
     const dom = new JSDOM(`<body>${html}</body>`, { pretendToBeVisual: true });
     const { window } = dom;
     const cache = new Map();
-    const api = { CosmosAsync: {}, Mousetrap: {}, Player: {}, Platform: {} };
+    const api = { Mousetrap: {}, Player: { origin: { _state: {} } }, Platform: {} };
     function load(file) {
         file = path.resolve(__dirname, '../src', file);
         if (cache.has(file)) return cache.get(file);
@@ -90,9 +90,12 @@ test('a failed tooltip API cannot prevent the buttons from working', t => {
     assert.deepEqual(s.counts(), [1, 0]);
 });
 
-test('missing toolbars do not block startup or keyboard activation', t => {
+test('late optional Cosmos API does not block startup or keyboard activation', t => {
     const s = setup(t);
     assert.equal(s.utils().allNotExist().length, 0);
+    s.api.Player.origin = undefined;
+    assert.equal(s.utils().allNotExist()[0][0], 'Spicetify Player');
+    s.api.Player.origin = { _state: {} };
     delete s.api.Player;
     assert.equal(s.utils().allNotExist()[0][0], 'Spicetify Player');
 });

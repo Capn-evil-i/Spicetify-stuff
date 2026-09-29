@@ -4,6 +4,7 @@ import CFM from "../utils/config";
 export const getHtmlContent = (areLyricsForceHidden: boolean) => {
     return `
         <canvas id="fsd-background"></canvas>
+<div id="fsd-hud-layer">
   ${
       CFM.get("contextDisplay") !== "never"
           ? `
@@ -36,6 +37,7 @@ export const getHtmlContent = (areLyricsForceHidden: boolean) => {
          : ""
  }
 <div id="fsd-volume-parent"></div>
+<div id="fsd-perspective-parent"></div>
 <div id="fsd-overview-card-parent"></div>
 
 ${CFM.get("lyricsDisplay") ? `<div id="fad-lyrics-plus-container"></div>` : ""}
@@ -133,5 +135,6 @@ ${CFM.get("lyricsDisplay") ? `<div id="fad-lyrics-plus-container"></div>` : ""}
             }
     </div>
     ${!CFM.getGlobal("tvMode") ? `<div id="fsd-progress-parent"></div>` : ""}
+</div>
 </div>`;
 };

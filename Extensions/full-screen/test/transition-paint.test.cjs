@@ -6,20 +6,25 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 function setup() {
-    const frames = [], paints = [];
-    const ctx = { drawImage: (...args) => paints.push(args), fillRect: () => paints.push(ctx.fillStyle) };
-    const canvas = { dataset: {}, getContext: () => ctx };
+    const frames = [], paints = [], clears = [];
+    const ctx = {
+        drawImage: (...args) => paints.push(args),
+        fillRect: () => paints.push(ctx.fillStyle),
+        clearRect: (...args) => clears.push(args),
+    };
+    const canvas = { width: 1920, height: 1080, dataset: {}, getContext: () => ctx };
     const module = { exports: {} };
     const source = fs.readFileSync(path.join(__dirname, '../src/utils/animation.ts'), 'utf8');
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
-        module, exports: module.exports, performance, document: { createElement: () => ({ getContext: () => ctx }) },
+        module, exports: module.exports, performance,
+        document: { createElement: () => ({ getContext: () => ({ drawImage: () => {} }) }) },
         require: () => ({ default: { get: key => ({backAnimationTime: 1, blurSize: 20, backgroundBrightness: 0.7, animationSpeed: 1})[key] } }),
         window: { innerWidth: 1920, innerHeight: 1080 },
         requestAnimationFrame: callback => frames.push(callback),
     });
-    return { ...module.exports, canvas, frames, paints };
+    return { ...module.exports, canvas, frames, paints, clears };
 }
-const image = { complete: true, naturalWidth: 640, width: 640, height: 640 };
+const image = { complete: true, naturalWidth: 640, naturalHeight: 640, width: 640, height: 640 };
 
 test('first artwork frame paints immediately instead of fading from an empty canvas', () => {
     const s = setup();
@@ -31,6 +36,7 @@ test('first artwork frame paints immediately instead of fading from an empty can
 test('resizing paints decoded artwork synchronously', () => {
     const s = setup();
     s.canvas.dataset.fsdPainted = 'true';
+    s.canvas.width = 1280;
     s.animateCanvas(image, image, s.canvas, true);
     assert.equal(s.paints.length, 1);
     assert.equal(s.frames.length, 0);
@@ -40,6 +46,10 @@ test('normal song changes retain the configured crossfade', () => {
     s.canvas.dataset.fsdPainted = 'true';
     s.animateCanvas(image, image, s.canvas);
     assert.equal(s.frames.length, 1);
+    s.frames.shift()(0);
+    s.frames.shift()(1000);
+    assert.equal(s.clears.length, 2);
+    assert.equal(s.frames.length, 0);
 });
 test('first solid-color frame does not animate from black', async () => {
     const s = setup();

@@ -1,4 +1,18 @@
 #full-screen-display[mode="tv"] {
+    --fsd-art-margin: 65px;
+
+    // Lyrics Plus keeps a scrollable viewport, but its native scrollbar is UI noise
+    // in the edge-to-edge TV layout (and can peek out after the perspective transform).
+    #fad-lyrics-plus-container .lyrics-lyricsContainer-LyricsContainer {
+        scrollbar-width: none !important;
+
+        &::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+    }
+
     #fsd-foreground {
         flex-direction: row;
         text-align: left;
@@ -20,7 +34,7 @@
         width: calc(100vw - 840px);
         min-width: 180px;
         max-width: 220px;
-        margin-left: 65px;
+        margin-left: var(--fsd-art-margin);
     }
 
     #fsd-progress-parent {
@@ -122,6 +136,263 @@
             height: 0;
             margin: 0;
             overflow: hidden;
+        }
+    }
+}
+
+// Keep TV mode inside the viewport on compact and portrait displays.
+@media (max-width: 800px) {
+    #full-screen-display[mode="tv"] {
+        --fsd-art-margin: 0px;
+
+        #fad-lyrics-plus-container {
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            width: auto;
+            height: 72%;
+
+            .lyrics-lyricsContainer-LyricsContainer {
+                height: 95% !important;
+            }
+        }
+
+        #fsd-foreground,
+        &.lyrics-active #fsd-foreground {
+            left: 16px;
+            right: 16px;
+            bottom: 24px;
+            top: auto;
+            height: auto;
+            min-height: 0;
+            width: auto;
+            max-width: none;
+            box-sizing: border-box;
+            align-items: center;
+        }
+
+        #fsd-art {
+            flex: 0 0 clamp(100px, 24vw, 150px);
+            width: clamp(100px, 24vw, 150px);
+            min-width: 0;
+            max-width: 150px;
+            margin-left: 0;
+        }
+
+        #fsd-details {
+            flex: 1 1 0;
+            width: auto;
+            min-width: 0;
+            padding-left: 12px;
+        }
+
+        #fsd-title {
+            font-size: clamp(22px, 5.8vw, 40px);
+        }
+
+        #fsd-artist,
+        #fsd-album {
+            font-size: clamp(14px, 3.4vw, 20px);
+        }
+
+        #fsd-status {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        #fsd-progress-parent {
+            width: 100%;
+            max-width: none;
+        }
+
+        @media (max-width: 480px) {
+            // Lyrics Plus positions the active row below the 72% panel on short screens.
+            // Extend only its scroll viewport so the row stays in place but is not cut off.
+            #fad-lyrics-plus-container {
+                .lyrics-lyricsContainer-LyricsContainer {
+                    height: calc(95% + clamp(64px, calc(376px - 80vw), 120px)) !important;
+                }
+            }
+
+            #fsd-ctx-container {
+                top: 16px;
+                left: 16px;
+                right: 16px;
+                width: auto;
+                max-width: none;
+                justify-content: flex-start;
+            }
+
+            #fsd-ctx-icon {
+                flex: 0 0 40px;
+                width: 40px;
+                height: 40px;
+            }
+
+            #fsd-ctx-details {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding-left: 12px;
+            }
+
+            #fsd-ctx-source,
+            #fsd-ctx-name {
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+            }
+
+            #fsd-ctx-name {
+                display: block;
+            }
+
+            #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyrics {
+                --lyrics-font-size: clamp(15px, 4.4vw, 18px);
+            }
+
+            @media (max-width: 360px) {
+                #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyrics {
+                    --lyrics-font-size: clamp(14px, 4.2vw, 15.5px);
+                }
+            }
+
+            @media (max-width: 340px) {
+                #fad-lyrics-plus-container {
+                    top: -12px;
+
+                    .lyrics-lyricsContainer-LyricsContainer {
+                        height: calc(95% + 160px) !important;
+                    }
+                }
+
+                #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyrics {
+                    --lyrics-font-size: 13px;
+                }
+
+                #fsd-foreground,
+                &.lyrics-active #fsd-foreground {
+                    left: 10px;
+                    right: 10px;
+                    bottom: 2px;
+                }
+
+                #fsd-art {
+                    flex-basis: 64px;
+                    width: 64px;
+                    max-width: 64px;
+                }
+            }
+
+            #fsd-foreground,
+            &.lyrics-active #fsd-foreground {
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+            }
+
+            #fsd-art {
+                flex: 0 0 clamp(72px, 20vw, 84px);
+                width: clamp(72px, 20vw, 84px);
+                max-width: 84px;
+            }
+
+            #fsd-details {
+                padding-left: 10px;
+            }
+
+            #fsd-title {
+                font-size: clamp(16px, 4.6vw, 18px);
+                line-height: 1.08;
+
+                svg {
+                    width: 16px;
+                    height: 20px;
+                }
+
+                span {
+                    -webkit-line-clamp: 1;
+                }
+            }
+
+            #fsd-artist,
+            #fsd-album {
+                font-size: 12px;
+                line-height: 1.15;
+                gap: 4px;
+
+                svg {
+                    width: 14px;
+                    height: 14px;
+                    margin-right: 4px;
+                }
+            }
+
+            #fsd-status {
+                flex-wrap: nowrap;
+                gap: 3px;
+
+                &.active {
+                    column-gap: 3px;
+                    margin: 3px 0;
+                }
+            }
+
+            .fsd-controls {
+                column-gap: 2px;
+                gap: 2px;
+            }
+
+            .fs-button {
+                padding: 1px 2px 0;
+            }
+
+            .fsd-controls svg {
+                width: 15px !important;
+                height: 15px !important;
+            }
+
+            #fsd-progress-parent {
+                padding-left: 0;
+            }
+        }
+    }
+}
+
+// Perspective HUD (see utils/hud-perspective.ts): words are split into boxes so each can follow
+// the curve (transforms need a box, not an inline run). Text blocks keep clipping for their line
+// clamps, with a little room for the words' own turn along the curve.
+#full-screen-display[mode="tv"].hud-perspective {
+    fsd-curve-word {
+        display: inline-block;
+    }
+
+    #fsd-ctx-details,
+    #fsd-title > span,
+    #fsd-artist > span,
+    #fsd-album > span {
+        overflow: clip;
+        overflow-clip-margin: 0.5em;
+    }
+}
+
+// On phones the source card already spans the top row; place the clock card
+// beneath it so the temporary popup never covers "Playing from album".
+@media (max-width: 480px) {
+    #full-screen-display[mode="tv"] #fsd-overview-card,
+    #full-screen-display[mode="tv"].hud-perspective #fsd-overview-card {
+        top: clamp(82px, 12vh, 96px);
+        transform: translateX(-50%) scale(0.86) translateY(0);
+
+        &.c-hidden {
+            transform: translateX(-50%) scale(0.43) translateY(-700px);
+        }
+
+        &:hover {
+            transform: translateX(-50%) scale(0.86) translateY(0);
         }
     }
 }

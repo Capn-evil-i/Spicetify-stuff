@@ -18,6 +18,7 @@ import { initMoustrapRecord } from "./services/mousetrap-record";
 
 import SeekableProgressBar from "./ui/components/ProgressBar/ProgressBar";
 import SeekableVolumeBar from "./ui/components/VolumeBar/VolumeBar";
+import PerspectiveBar from "./ui/components/PerspectiveBar/PerspectiveBar";
 import OverviewCard from "./ui/components/OverviewPopup/OverviewCard";
 import HtmlSelectors from "./utils/selectors";
 
@@ -29,6 +30,7 @@ import { PlayerControls } from "./ui/components/PlayerControls/PlayerControls";
 import { ExtraControls } from "./ui/components/ExtraControls/ExtraControls";
 import { Lyrics } from "./ui/components/Lyrics/Lyrics";
 import { Background } from "./utils/background";
+import { setHudPerspectiveStrength } from "./utils/hud-perspective";
 
 import "./styles/base.scss";
 import "./styles/tvMode.scss";
@@ -49,6 +51,10 @@ async function main() {
         entriesNotPresent = Utils.allNotExist();
         INIT_RETRIES += 1;
     }
+
+    // Spotify 1.3 can expose Player before its data snapshot is copied to the
+    // Spicetify helper object. Seed it from the live API so the first render is stable.
+    Spicetify.Player.data ??= Spicetify.Player.origin._state;
 
     // Start from here
     showWhatsNew();
@@ -98,6 +104,11 @@ async function main() {
         DOM.container.classList.toggle("glow-progress", Boolean(CFM.get("glowProgressBar")));
         DOM.container.classList.toggle("glow-controls", Boolean(CFM.get("glowControls")));
         DOM.container.classList.toggle("glow-art", Boolean(CFM.get("glowArt")));
+        DOM.container.classList.toggle(
+            "hud-perspective",
+            CFM.getMode() === "tv" && Boolean(CFM.get("hudPerspective")),
+        );
+        setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
         Utils.toggleQueuePanel(DOM.queue, false);
         DOM.container.classList.toggle(
             "vertical-mode",
@@ -325,7 +336,6 @@ async function main() {
 
         // Populate text immediately; artwork loading must not delay the whole view.
         {
-            DOM.cover.style.backgroundImage = `url("${meta.image_xlarge_url}")`;
             DOM.title.innerText = songName || "";
             DOM.title.setAttribute("uri", Spicetify.Player.data?.item?.uri || "");
 
@@ -355,14 +365,15 @@ async function main() {
             }
         }
 
-        DOM.coverImg.onload = () => { DOM.cover.style.backgroundImage = `url("${DOM.coverImg.src}")`; };
-        DOM.coverImg.src = meta.image_xlarge_url;
-
-        // Placeholder
         DOM.coverImg.onerror = () => {
             console.error("Check your Internet! Unable to load Image");
+            DOM.coverImg.onerror = null;
             DOM.coverImg.src = ICONS.OFFLINE_SVG;
         };
+        DOM.coverImg.onload = () => {
+            if (DOM.cover.isConnected) Utils.fadeBackgroundImage(DOM.cover, DOM.coverImg.src);
+        };
+        DOM.coverImg.src = meta.image_xlarge_url;
     }
 
     function updatePlayingIcon(evt: any) {
@@ -400,13 +411,17 @@ async function main() {
     function onStatusLeave() {
         if (CFM.get("playerControls") === "mousemove") PlayerControls.hidePlayerControls();
         if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControls();
+        updateControlsCollapsed();
     }
 
     const controlsObserver = new MutationObserver(updateControlsCollapsed);
 
     function updateControlsCollapsed() {
         const rows = DOM.container.querySelectorAll<HTMLElement>(".fsd-controls, #fsd-progress-container");
-        const allHidden = rows.length > 0 && Array.from(rows).every((row) => row.style.opacity === "0");
+        // Hovered rows stay visible through CSS even after their timer fades them, so they must not collapse
+        // under the pointer (the progress bar would slide over the buttons).
+        const hovered = DOM.container.querySelector("#fsd-status:hover, #fsd-progress-parent:hover");
+        const allHidden = !hovered && rows.length > 0 && Array.from(rows).every((row) => row.style.opacity === "0");
         DOM.container.classList.toggle("controls-collapsed", allHidden);
     }
 
@@ -544,6 +559,7 @@ async function main() {
             // 1. Mount overlay and activate classes immediately so TV mode shows right away
             document.body.append(DOM.style, DOM.container);
             document.body.classList.add(...CLASSES_TO_ADD);
+            setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
 
             // 2. Trigger native fullscreen simultaneously so TV mode is what expands into fullscreen
             if (CFM.get("enableFullscreen") && !document.fullscreenElement) {
@@ -585,6 +601,9 @@ async function main() {
                     <SeekableVolumeBar state={CFM.get("volumeDisplay") as Settings["volumeDisplay"]} />,
                     DOM.container.querySelector("#fsd-volume-parent"),
                 );
+            }
+            if (CFM.getMode() === "tv") {
+                ReactDOM.render(<PerspectiveBar />, DOM.container.querySelector("#fsd-perspective-parent"));
             }
             if (CFM.get("icons")) {
                 updatePlayingIcon({ data: { is_paused: !Spicetify.Player.isPlaying() } });
@@ -703,6 +722,8 @@ async function main() {
             }
             const volParent = DOM.container.querySelector("#fsd-volume-parent");
             if (volParent) ReactDOM.unmountComponentAtNode(volParent);
+            const perspectiveParent = DOM.container.querySelector("#fsd-perspective-parent");
+            if (perspectiveParent) ReactDOM.unmountComponentAtNode(perspectiveParent);
             const progParent = DOM.container.querySelector("#fsd-progress-parent");
             if (progParent) ReactDOM.unmountComponentAtNode(progParent);
             const cardParent = DOM.container.querySelector("#fsd-overview-card-parent");
@@ -748,6 +769,7 @@ async function main() {
     function resizeEvents() {
         paintReadyBackground();
         if (CFM.get("upnextDisplay") !== "never") UpNext.updateUpNext();
+        setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
         DOM.container.classList.toggle(
             "vertical-mode",
             (CFM.get("verticalMonitorSupport") as Settings["verticalMonitorSupport"]) &&

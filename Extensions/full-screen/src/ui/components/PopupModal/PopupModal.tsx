@@ -20,18 +20,11 @@ export const PopupModal = {
         dialog.className = "fs-popup-modal";
         if (isLarge) dialog.classList.add("fs-popup-modal-large");
 
-        // Native bounds checking to close when clicking the ::backdrop
+        // A native dialog dispatches backdrop clicks directly on the dialog itself.
+        // Checking the target avoids treating synthetic child clicks as backdrop clicks
+        // when those clicks have no pointer coordinates.
         dialog.addEventListener("click", (e) => {
-            const rect = dialog.getBoundingClientRect();
-            const isInDialog = (
-                rect.top <= e.clientY && 
-                e.clientY <= rect.top + rect.height &&
-                rect.left <= e.clientX && 
-                e.clientX <= rect.left + rect.width
-            );
-            if (!isInDialog) {
-                PopupModal.hide();
-            }
+            if (e.target === dialog) PopupModal.hide();
         });
 
         // Close on Esc key natively works, but we also want to clean up our DOM correctly

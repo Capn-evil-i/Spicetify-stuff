@@ -5,6 +5,7 @@ import translations from "../../../resources/strings";
 import ICONS, { DEFAULTS } from "../../../constants";
 import { Config, Settings } from "../../../types/fullscreen";
 import Utils from "../../../utils/utils";
+import { setHudPerspectiveStrength } from "../../../utils/hud-perspective";
 import { DOM } from "../../elements";
 import { headerText, getSettingCard, createAdjust, getAboutSection } from "../../../utils/setting";
 import SeekableProgressBar from "../ProgressBar/ProgressBar";
@@ -15,6 +16,15 @@ import {
     animateColor,
 } from "../../../utils/animation";
 import { PopupModal } from "../PopupModal/PopupModal";
+
+const GLOW_SETTING_KEYS = [
+    "glowLyrics",
+    "glowTitle",
+    "glowDetails",
+    "glowProgressBar",
+    "glowControls",
+    "glowArt",
+] as const;
 
 export class ConfigManager {
     static configContainer: HTMLDivElement;
@@ -59,6 +69,131 @@ export class ConfigManager {
         // LOCALE = CFM.getGlobal("locale") as Config["locale"]; // Update locale handled in app.tsx or getter
         this.render();
         if (Utils.isModeActivated()) this.activate();
+    }
+
+    static syncGlowAllToggle() {
+        const card = this.configContainer?.querySelector<HTMLElement>('[setting-key="glowAll"]');
+        const toggle = card?.querySelector<HTMLInputElement>("input");
+        if (!toggle) return;
+
+        const enabledCount = GLOW_SETTING_KEYS.filter((key) => Boolean(CFM.get(key))).length;
+        const allEnabled = enabledCount === GLOW_SETTING_KEYS.length;
+        const partiallyEnabled = enabledCount > 0 && !allEnabled;
+        const atDefaults = GLOW_SETTING_KEYS.every(
+            (key) => CFM.get(key) === DEFAULTS[CFM.getMode()][key],
+        );
+
+        toggle.checked = allEnabled;
+        toggle.indeterminate = partiallyEnabled;
+        card?.classList.toggle("is-partial", partiallyEnabled);
+        card?.setAttribute("setting-default", String(atDefaults));
+    }
+
+    static syncGlowSettingInputs() {
+        GLOW_SETTING_KEYS.forEach((key) => {
+            const input = this.configContainer?.querySelector<HTMLInputElement>(
+                `[setting-key="${key}"] input`,
+            );
+            if (input) input.checked = Boolean(CFM.get(key));
+        });
+        this.syncGlowAllToggle();
+    }
+
+    static syncVisualEffectClasses() {
+        const glowClasses = {
+            glowLyrics: "glow-lyrics",
+            glowTitle: "glow-title",
+            glowDetails: "glow-details",
+            glowProgressBar: "glow-progress",
+            glowControls: "glow-controls",
+            glowArt: "glow-art",
+        } as const;
+        for (const [key, className] of Object.entries(glowClasses) as [keyof typeof glowClasses, string][]) {
+            DOM.container.classList.toggle(className, Boolean(CFM.get(key)));
+        }
+        DOM.container.classList.toggle(
+            "hud-perspective",
+            CFM.getMode() === "tv" && Boolean(CFM.get("hudPerspective")),
+        );
+        setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
+    }
+
+    static createGlowAllToggle(LOCALE: string) {
+        const card = getSettingCard(
+            `<label class="switch">
+                <input class="glow-all-input" type="checkbox" aria-label="${translations[LOCALE].settings.glowAll}">
+                <span class="slider"></span>
+            </label>`,
+            translations[LOCALE].settings.glowAll,
+            GLOW_SETTING_KEYS[0],
+            translations[LOCALE].settings.glowAllDescription,
+        );
+        card.classList.add("glow-all-setting");
+        card.setAttribute("setting-key", "glowAll");
+
+        const toggle = card.querySelector<HTMLInputElement>("input");
+        if (toggle) {
+            toggle.onchange = (event) => {
+                const enabled = (event.currentTarget as HTMLInputElement).checked;
+                GLOW_SETTING_KEYS.forEach((key) => CFM.set(key, enabled));
+                this.syncVisualEffectClasses();
+                this.syncGlowSettingInputs();
+            };
+        }
+
+        return card;
+    }
+
+    static createGlowToggle(title: string, key: (typeof GLOW_SETTING_KEYS)[number]) {
+        return this.createToggle(title, key, (value) => {
+            CFM.set(key, value);
+            this.syncVisualEffectClasses();
+            this.syncGlowAllToggle();
+        });
+    }
+
+    static createVisualEffectsDefaultsButton(title: string, description: string) {
+        const row = document.createElement("div");
+        row.className = "setting-button-row visual-effects-defaults-row";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "main-buttons-button main-button-secondary";
+        button.id = "reset-visual-effects";
+        button.textContent = title;
+        button.title = description;
+        button.onclick = () => {
+            const defaults = DEFAULTS[CFM.getMode()];
+            for (const key of [...GLOW_SETTING_KEYS, "hudPerspective", "hudPerspectiveStrength", "hudPerspectiveBackground"] as const) {
+                CFM.resetSettings(key);
+            }
+
+            this.syncVisualEffectClasses();
+            this.syncGlowSettingInputs();
+            const perspective = this.configContainer.querySelector<HTMLInputElement>(
+                '[setting-key="hudPerspective"] input[type="checkbox"]',
+            );
+            if (perspective) perspective.checked = defaults.hudPerspective;
+            const background = this.configContainer.querySelector<HTMLInputElement>(
+                '[setting-key="hudPerspectiveBackground"] input[type="checkbox"]',
+            );
+            if (background) background.checked = defaults.hudPerspectiveBackground;
+            const strength = this.configContainer.querySelector<HTMLInputElement>(
+                '[setting-key="hudPerspectiveStrength"] input[type="range"]',
+            );
+            if (strength) {
+                strength.value = String(defaults.hudPerspectiveStrength);
+                const output = strength.parentElement?.querySelector<HTMLOutputElement>("output");
+                if (output) output.value = `${defaults.hudPerspectiveStrength}%`;
+            }
+            for (const key of [...GLOW_SETTING_KEYS, "hudPerspective", "hudPerspectiveStrength", "hudPerspectiveBackground"] as const) {
+                this.configContainer
+                    .querySelector<HTMLElement>(`[setting-key="${key}"]`)
+                    ?.setAttribute("setting-default", "true");
+            }
+
+        };
+        row.append(button);
+        return row;
     }
 
     static getSettingTopHeader(LOCALE: string) {
@@ -163,6 +298,37 @@ export class ConfigManager {
             else toggle.checked = CFM.get(key as keyof Settings) as boolean;
 
             toggle.onchange = (evt) => callback((evt?.target as HTMLInputElement)?.checked);
+        }
+        return settingCard;
+    }
+
+    static createRange(
+        title: string,
+        key: keyof Settings,
+        value: number,
+        min: number,
+        max: number,
+        onChange: (value: number) => void,
+        description = "",
+    ) {
+        const settingCard = getSettingCard(
+            `<label class="range-setting-control">
+                <input type="range" min="${min}" max="${max}" step="1" value="${value}" aria-label="${title}">
+                <output class="range-setting-value">${value}%</output>
+            </label>`,
+            title,
+            key,
+            description,
+        );
+        const input = settingCard.querySelector<HTMLInputElement>('input[type="range"]');
+        const output = settingCard.querySelector<HTMLOutputElement>("output");
+        if (input && output) {
+            input.oninput = () => {
+                const strength = Number(input.value);
+                output.value = `${strength}%`;
+                setHudPerspectiveStrength(DOM.container, strength);
+            };
+            input.onchange = () => onChange(Number(input.value));
         }
         return settingCard;
     }
@@ -281,13 +447,43 @@ export class ConfigManager {
                 "lyricsAlignment",
                 (value: string) => this.saveOption("lyricsAlignment", value),
             ),
+            ...(CFM.getMode() === "tv"
+                ? [
+                    this.createToggle(
+                        translations[LOCALE].settings.hudPerspective,
+                        "hudPerspective",
+                        (value) => this.saveOption("hudPerspective", value),
+                        translations[LOCALE].settings.hudPerspectiveDescription,
+                    ),
+                    this.createRange(
+                        translations[LOCALE].settings.hudPerspectiveStrength,
+                        "hudPerspectiveStrength",
+                        Number(CFM.get("hudPerspectiveStrength")),
+                        0,
+                        100,
+                        (value) => this.saveOption("hudPerspectiveStrength", value),
+                        translations[LOCALE].settings.hudPerspectiveStrengthDescription,
+                    ),
+                    this.createToggle(
+                        translations[LOCALE].settings.hudPerspectiveBackground,
+                        "hudPerspectiveBackground",
+                        (value) => this.saveOption("hudPerspectiveBackground", value),
+                        translations[LOCALE].settings.hudPerspectiveBackgroundDescription,
+                    ),
+                ]
+                : []),
             headerText(translations[LOCALE].settings.glowHeader),
-            this.createToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),
-            this.createToggle(translations[LOCALE].settings.glowTitle, "glowTitle"),
-            this.createToggle(translations[LOCALE].settings.glowDetails, "glowDetails"),
-            this.createToggle(translations[LOCALE].settings.glowProgressBar, "glowProgressBar"),
-            this.createToggle(translations[LOCALE].settings.glowControls, "glowControls"),
-            this.createToggle(translations[LOCALE].settings.glowArt, "glowArt"),
+            this.createGlowAllToggle(LOCALE),
+            this.createGlowToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),
+            this.createGlowToggle(translations[LOCALE].settings.glowTitle, "glowTitle"),
+            this.createGlowToggle(translations[LOCALE].settings.glowDetails, "glowDetails"),
+            this.createGlowToggle(translations[LOCALE].settings.glowProgressBar, "glowProgressBar"),
+            this.createGlowToggle(translations[LOCALE].settings.glowControls, "glowControls"),
+            this.createGlowToggle(translations[LOCALE].settings.glowArt, "glowArt"),
+            this.createVisualEffectsDefaultsButton(
+                translations[LOCALE].settings.visualEffectsDefaults,
+                translations[LOCALE].settings.visualEffectsDefaultsDescription,
+            ),
             headerText(translations[LOCALE].settings.generalHeader),
             this.createOptions(
                 translations[LOCALE].settings.progressBar,
@@ -618,6 +814,7 @@ export class ConfigManager {
             getAboutSection(),
             this.getSettingBottomHeader(LOCALE),
         );
+        this.syncGlowSettingInputs();
         PopupModal.display({
             title:
                 CFM.getMode() === "tv"

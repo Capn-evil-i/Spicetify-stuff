@@ -20,6 +20,9 @@ export type Settings = {
     glowProgressBar: boolean;
     glowControls: boolean;
     glowArt: boolean;
+    hudPerspective: boolean;
+    hudPerspectiveStrength: number;
+    hudPerspectiveBackground: boolean;
     animationTempo: number;
     progressBarDisplay: "never" | "mousemove" | "always";
     playerControls: "never" | "mousemove" | "always";

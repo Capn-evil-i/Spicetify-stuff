@@ -4,6 +4,20 @@ import CFM from "./config";
 // Cancel any in-flight crossfade or color animation before starting a new one.
 // This prevents overlapping rAF loops from stacking and burning CPU.
 let activeCanvasAnimId: number | null = null;
+let rotationAnimationGeneration = 0;
+
+function snapshotCanvas(back: HTMLCanvasElement) {
+    const frame = document.createElement("canvas");
+    frame.width = back.width;
+    frame.height = back.height;
+    frame.getContext("2d")!.drawImage(back, 0, 0);
+    return frame;
+}
+
+function resizeCanvasIfNeeded(back: HTMLCanvasElement, width: number, height: number) {
+    if (back.width !== width) back.width = width;
+    if (back.height !== height) back.height = height;
+}
 
 function cancelActiveCanvasAnim() {
     if (activeCanvasAnimId !== null) {
@@ -13,63 +27,68 @@ function cancelActiveCanvasAnim() {
 }
 
 export function animateCanvas(
-    prevImg: HTMLImageElement,
+    _prevImg: HTMLImageElement,
     nextImg: HTMLImageElement,
     back: HTMLCanvasElement,
     fromResize = false,
 ) {
+    if (!nextImg.complete || !nextImg.naturalWidth || !nextImg.naturalHeight) return;
     cancelActiveCanvasAnim();
 
     const configTransitionTime = CFM.get("backAnimationTime") as Settings["backAnimationTime"];
     const { innerWidth: width, innerHeight: height } = window;
-    back.width = width;
-    back.height = height;
+    const resized = back.width !== width || back.height !== height;
+    const firstPaint = !back.dataset.fsdPainted;
+    const previousFrame = !firstPaint && !resized && !fromResize && configTransitionTime > 0
+        ? snapshotCanvas(back)
+        : null;
+    resizeCanvasIfNeeded(back, width, height);
 
     const ctx = back.getContext("2d") as CanvasRenderingContext2D;
     ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = "source-over";
     const blur = CFM.get("blurSize") as Settings["blurSize"];
     ctx.filter = `brightness(${CFM.get("backgroundBrightness")}) blur(${blur}px)`;
 
     const vals = getSizeValues(width, height, nextImg.width, nextImg.height);
-    const x = vals.x - blur * 2;
-    const y = vals.y - blur * 2;
-    const sizeX = vals.width + blur * 4;
-    const sizeY = vals.height + blur * 4;
+    // Draw far enough past each canvas edge that the blur kernel remains opaque
+    // at the viewport boundary instead of feathering into transparent black.
+    const blurOverscan = blur * 4;
+    const x = vals.x - blurOverscan;
+    const y = vals.y - blurOverscan;
+    const sizeX = vals.width + blurOverscan * 2;
+    const sizeY = vals.height + blurOverscan * 2;
 
-    const firstPaint = !back.dataset.fsdPainted;
     back.dataset.fsdPainted = "true";
 
     // Instant paint: first frame, resize, same image, or no transition time configured.
-    if (firstPaint || fromResize || !prevImg.complete || !prevImg.naturalWidth
+    if (firstPaint || resized || fromResize || !previousFrame
         || configTransitionTime <= 0) {
         ctx.globalAlpha = 1;
         ctx.drawImage(nextImg, x, y, sizeX, sizeY);
         return;
     }
 
-    let prevTimeStamp: number,
-        start: number,
-        done = false;
+    let start: number;
 
     const animate = (timestamp: number) => {
         if (start === undefined) start = timestamp;
 
         const elapsed = timestamp - start;
 
-        if (prevTimeStamp !== timestamp) {
-            const factor = Math.min(elapsed / (configTransitionTime * 1000), 1.0);
+        const factor = Math.min(elapsed / (configTransitionTime * 1000), 1);
+        ctx.clearRect(0, 0, width, height);
+        if (factor < 1) {
+            ctx.filter = "none";
             ctx.globalAlpha = 1;
-            ctx.drawImage(prevImg, x, y, sizeX, sizeY);
-            ctx.globalAlpha = Math.sin((Math.PI / 2) * factor);
-            ctx.drawImage(nextImg, x, y, sizeX, sizeY);
-            if (factor === 1.0) done = true;
+            ctx.drawImage(previousFrame, 0, 0);
         }
-        if (elapsed < configTransitionTime * 1000) {
-            prevTimeStamp = timestamp;
-            if (!done) activeCanvasAnimId = requestAnimationFrame(animate);
-        } else {
-            activeCanvasAnimId = null;
-        }
+        ctx.filter = `brightness(${CFM.get("backgroundBrightness")}) blur(${blur}px)`;
+        ctx.globalAlpha = factor;
+        ctx.drawImage(nextImg, x, y, sizeX, sizeY);
+        ctx.globalAlpha = 1;
+        if (factor < 1) activeCanvasAnimId = requestAnimationFrame(animate);
+        else activeCanvasAnimId = null;
     };
 
     activeCanvasAnimId = requestAnimationFrame(animate);
@@ -81,14 +100,21 @@ export async function animateColor(nextColor: string, back: HTMLCanvasElement, f
 
     const configTransitionTime = CFM.get("backAnimationTime") as Settings["backAnimationTime"];
     const { innerWidth: width, innerHeight: height } = window;
-    back.width = width;
-    back.height = height;
+    const resized = back.width !== width || back.height !== height;
+    const firstPaint = !back.dataset.fsdPainted;
+    const previousFrame = !firstPaint && !resized && !fromConfig
+        && configTransitionTime > 0 && prevColor !== nextColor
+        ? snapshotCanvas(back)
+        : null;
+    resizeCanvasIfNeeded(back, width, height);
 
     const ctx = back.getContext("2d") as CanvasRenderingContext2D;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = "none";
 
-    const firstPaint = !back.dataset.fsdPainted;
     back.dataset.fsdPainted = "true";
-    if (firstPaint || fromConfig || configTransitionTime <= 0 || prevColor === nextColor) {
+    if (firstPaint || resized || fromConfig || !previousFrame
+        || configTransitionTime <= 0 || prevColor === nextColor) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = nextColor;
         ctx.fillRect(0, 0, width, height);
@@ -96,30 +122,25 @@ export async function animateColor(nextColor: string, back: HTMLCanvasElement, f
         return;
     }
 
-    let previousTimeStamp: number,
-        done = false,
-        start: number;
+    // Use the visible canvas as the source even when a previous transition was interrupted.
+    prevColor = nextColor;
+    let start: number;
     const animate = (timestamp: number) => {
         if (start === undefined) start = timestamp;
         const elapsed = timestamp - start;
 
-        if (previousTimeStamp !== timestamp) {
-            const factor = Math.min(elapsed / (configTransitionTime * 1000), 1.0);
+        const factor = Math.min(elapsed / (configTransitionTime * 1000), 1);
+        ctx.clearRect(0, 0, width, height);
+        if (factor < 1) {
             ctx.globalAlpha = 1;
-            ctx.fillStyle = prevColor;
-            ctx.fillRect(0, 0, width, height);
-            ctx.globalAlpha = Math.sin((Math.PI / 2) * factor);
-            ctx.fillStyle = nextColor;
-            ctx.fillRect(0, 0, width, height);
-            if (factor === 1.0) done = true;
+            ctx.drawImage(previousFrame, 0, 0);
         }
-        if (elapsed < configTransitionTime * 1000) {
-            previousTimeStamp = timestamp;
-            if (!done) activeCanvasAnimId = requestAnimationFrame(animate);
-        } else {
-            prevColor = nextColor;
-            activeCanvasAnimId = null;
-        }
+        ctx.globalAlpha = factor;
+        ctx.fillStyle = nextColor;
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalAlpha = 1;
+        if (factor < 1) activeCanvasAnimId = requestAnimationFrame(animate);
+        else activeCanvasAnimId = null;
     };
 
     activeCanvasAnimId = requestAnimationFrame(animate);
@@ -129,6 +150,7 @@ let isAnimationRunning = false;
 
 export const modifyIsAnimationRunning = (value: boolean) => {
     isAnimationRunning = value;
+    if (!value) rotationAnimationGeneration++;
 };
 
 let rotationSpeed = CFM.get("animationSpeed") as Settings["animationSpeed"];
@@ -139,10 +161,11 @@ export const modifyRotationSpeed = (value: number) => {
 
 //todo: fix high resource usage when re rendering on setting change
 export function animatedRotatedCanvas(back: HTMLCanvasElement, bgImg: HTMLImageElement) {
+    if (!bgImg.complete || !bgImg.naturalWidth) return;
+    const generation = ++rotationAnimationGeneration;
     const ctx = back.getContext("2d") as CanvasRenderingContext2D;
 
-    back.width = window.innerWidth;
-    back.height = window.innerHeight;
+    resizeCanvasIfNeeded(back, window.innerWidth, window.innerHeight);
 
     const blur = Math.max(CFM.get("blurSize") as Settings["blurSize"], 28);
     const brightness = Math.min(
@@ -160,6 +183,7 @@ export function animatedRotatedCanvas(back: HTMLCanvasElement, bgImg: HTMLImageE
     // let frameCount = 0;
 
     function draw() {
+        if (!isAnimationRunning || generation !== rotationAnimationGeneration) return;
         ctx.clearRect(0, 0, back.width, back.height);
 
         ctx.save();
@@ -187,7 +211,7 @@ export function animatedRotatedCanvas(back: HTMLCanvasElement, bgImg: HTMLImageE
         //     lastFrameTime1 = now;
         // }
 
-        if (isAnimationRunning) requestAnimationFrame(draw);
+        requestAnimationFrame(draw);
     }
     isAnimationRunning = true;
     draw();
