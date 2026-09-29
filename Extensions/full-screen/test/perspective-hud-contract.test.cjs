@@ -21,23 +21,26 @@ test('perspective strength sets the fisheye and compact layouts keep a gentler o
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
 });
 
-test('the fisheye is horizontal only, smooth, and keeps the edges', () => {
-  // f(u) = u + k sin(pi u) / pi: f(+-1) = +-1, centre magnified by 1 + k, no seam at u = 0.
-  assert.match(helper, /return u \+ \(warp \* Math\.sin\(Math\.PI \* u\)\) \/ Math\.PI;/);
+test('the HUD is laid out on a screen curved inwards, mainly horizontally, without tilting', () => {
+  // f(u) = u - k sin(pi u) / pi: f(+-1) = +-1, the sides drawn wider (closer), the middle narrower.
+  assert.match(helper, /return u - \(warp \* Math\.sin\(Math\.PI \* u\)\) \/ Math\.PI;/);
   // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
   assert.match(helper, /function updateMargins\(/);
-  // Words are placed inside their stretched block, so they never leave its clipping box.
-  assert.match(helper, /place\(word, flat, \(wordBlocks\[i\] && blockNow\.get\(wordBlocks\[i\]!\)\) \|\| IDENTITY\)/);
-  assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not warped under the pointer');
+  // Height follows only a share of the width change, and nothing moves vertically or turns.
+  assert.match(helper, /const VERTICAL = 0\.3;/);
   assert.match(helper, /piece\.style\.translate = `\$\{shift\.toFixed\(1\)\}px 0`/);
-  assert.match(helper, /piece\.style\.scale = `\$\{stretch\.toFixed\(3\)\} 1`/);
+  assert.match(helper, /piece\.style\.scale = `\$\{stretch\.toFixed\(3\)\} \$\{ownTall\.toFixed\(3\)\}`/);
   assert.doesNotMatch(helper, /style\.rotate/, 'nothing is tilted');
-  assert.doesNotMatch(helper, /px 0 \$\{|translate = `0 /, 'nothing moves vertically');
-  // Words are split so each can take its own slice of the curve, and joined again when it is off.
+  // Lyric lines bend word by word like the title, and words stay inside their scaled block.
+  assert.match(helper, /const BLOCKS = \[[\s\S]*?LYRIC_LINES,\s*\]\.join/);
+  assert.match(helper, /place\(word, flat, \(block && blockNow\.get\(block\)\) \|\| IDENTITY\)/);
+  // Lyric lines move by their own vertical transform, so only their words change height.
+  assert.match(helper, /blockNow\.set\(block, place\(block, flat, IDENTITY, false\)\)/);
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
   assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;/);
+  assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not warped under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
   assert.doesNotMatch(tvStyles, /\.hud-perspective\s*\{[\s\S]*?#fsd-overview-card\s*\{\s*left: auto;/, 'the clock card stays where it is');
@@ -45,7 +48,9 @@ test('the fisheye is horizontal only, smooth, and keeps the edges', () => {
 
 test('only the blurred background is warped as an image, and it can be turned off', () => {
   assert.match(helper, /feDisplacementMap/);
-  assert.match(helper, /xChannelSelector="R"/);
+  assert.match(helper, /xChannelSelector="R" yChannelSelector="G"/);
+  // The background never samples from outside the image.
+  assert.match(helper, /tall\[i\] = \(1 \+ VERTICAL \* \(slope\(u\) - 1\)\) \/ shortest;/);
   assert.match(helper, /CFM\.get\("hudPerspectiveBackground"\)/);
   assert.match(helper, /#fsd-background/);
 });
