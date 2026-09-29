@@ -29,21 +29,23 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.match(helper, /const curveY = \(x: number, y: number\) => midline\(\) \+ \(y - midline\(\)\) \* heightAt\(x\);/);
   // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
-  // Words are sheared (upright strokes stay upright) and scaled only vertically; no sideways scale.
+  // Words, the artwork and the progress bar are sheared (upright edges stay upright) and scaled
+  // only vertically; no sideways scale, and nothing is resampled, so edges stay anti-aliased.
   assert.match(helper, /word\.style\.transform = `matrix\(1, \$\{shear\.toFixed\(4\)\}, 0, \$\{tall\.toFixed\(3\)\}, 0, /);
   assert.match(helper, /piece\.style\.translate = `0 \$\{dy\.toFixed\(1\)\}px`/);
   assert.match(helper, /piece\.style\.scale = `1 \$\{tall\.toFixed\(3\)\}`/);
+  assert.match(helper, /placeSheared\(element, flat, null, 0\);/);
+  assert.doesNotMatch(helper, /function bendRest|element\.style\.filter/, 'no displacement filter on HUD elements');
   assert.doesNotMatch(helper, /style\.rotate|rotate\(/, 'nothing turns');
-  // Text blocks are sheared as a whole so their clipping follows the curve; lyric lines only move,
-  // because lyrics-plus places them with its own transform.
-  assert.match(helper, /if \(isLine\) block\.style\.translate = `0 \$\{lift\.toFixed\(1\)\}px`;/);
+  // Text blocks are sheared as a whole so their clipping follows the curve. Lyric lines stay where
+  // lyrics-plus puts them and their words bend around the line's middle.
+  assert.match(helper, /linePin\.set\(block, liftAt\(/);
+  assert.doesNotMatch(helper, /block\.style\.translate/, 'lyric lines are not moved');
   assert.match(helper, /const BLOCKS = \[[\s\S]*?LYRIC_LINES,\s*\]\.join/);
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
   assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
-  // The artwork and progress bar bend through a vertical-only displacement filter.
   assert.match(helper, /const BENT = \["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"\]/);
-  assert.match(helper, /image\.data\[p \* 4\] = 128;/);
   assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
@@ -89,4 +91,11 @@ test('phone lyrics get enough scroll viewport to keep the active line visible', 
   assert.match(tvStyles, /@media \(max-width: 360px\)[\s\S]*?\.lyrics-lyricsContainer-SyncedLyrics\s*\{\s*--lyrics-font-size: clamp\(14px, 4\.2vw, 15\.5px\)/);
   assert.match(tvStyles, /@media \(max-width: 340px\)[\s\S]*?\.lyrics-lyricsContainer-SyncedLyrics\s*\{\s*--lyrics-font-size: 13px/);
   assert.match(tvStyles, /@media \(max-width: 340px\)[\s\S]*?#fad-lyrics-plus-container\s*\{\s*top: -12px;[\s\S]*?height: calc\(95% \+ 160px\) !important/);
+});
+
+test('TV lyrics fade out at the top and bottom instead of being cut off', () => {
+  // On the synced page (the box that clips the lines), not the container holding the buttons, and
+  // not the zero-height lines wrapper, which would hide everything.
+  assert.match(tvStyles, /#fad-lyrics-plus-container \.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: linear-gradient\(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%\);/);
+  assert.doesNotMatch(tvStyles, /\.lyrics-lyricsContainer-SyncedLyrics,|\.lyrics-lyricsContainer-SyncedLyrics \{[^}]*mask/);
 });

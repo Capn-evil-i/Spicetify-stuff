@@ -13,6 +13,14 @@
         }
     }
 
+    // Synced lines fade out toward the top and bottom of the lyrics area, like Apple Music, instead
+    // of being cut off at its edges. The mask sits on the synced page (the box that clips the
+    // lines), not the whole container, so the lyrics-plus buttons in its corner stay fully visible.
+    #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyricsPage {
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+        mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+    }
+
     #fsd-foreground {
         flex-direction: row;
         text-align: left;
@@ -376,7 +384,10 @@
     #fsd-title > span,
     #fsd-artist > span,
     #fsd-album > span,
-    #fsd_up_next_text {
+    #fsd_up_next_text,
+    #fsd-art,
+    #fsd-progress-bar,
+    #fsd_next_art {
         transform-origin: 0 0;
     }
 

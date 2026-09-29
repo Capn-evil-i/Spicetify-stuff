@@ -24,9 +24,55 @@
         opacity: 1;
     }
 
+    #fsd-perspective-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
     #fsd-perspective-label {
         font-size: 14px;
         color: var(--secondary-color);
+    }
+
+    // On/off switch: keeps the strength when it is turned off.
+    #fsd-perspective-toggle {
+        position: relative;
+        flex: 0 0 auto;
+        width: 30px;
+        height: 16px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        background-color: var(--theme-main-color, var(--primary-color));
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+
+        #fsd-perspective-toggle-knob {
+            position: absolute;
+            top: 2px;
+            left: 16px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            transition: left 0.2s ease;
+        }
+    }
+
+    &.perspective-off {
+        #fsd-perspective-toggle {
+            background-color: rgba(var(--main-color), 0.35);
+
+            #fsd-perspective-toggle-knob {
+                left: 2px;
+            }
+        }
+
+        #fsd-perspective-bar-inner {
+            opacity: 0.4;
+        }
     }
 
     #fsd-perspective-bar {

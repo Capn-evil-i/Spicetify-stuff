@@ -12,12 +12,12 @@ import CFM from "./config";
 // middle. The arc is level in the middle (no sharp point) and keeps getting steeper all the way
 // out to the edges, like a curved screen, rather than flattening off near them.
 //
-// Text is not resampled (that loses anti-aliasing). Every word is sheared and scaled vertically to
-// its slice of the arc: its upright strokes stay upright and its baseline follows the curve. Text
-// blocks are sheared as a whole first, so their clipping boxes follow the curve with their words.
-// Buttons and icons move with the curve. The artwork and progress bar bend through a small SVG
-// displacement filter for what their move leaves over, and the blurred background bends the same
-// way.
+// Nothing on the HUD is resampled (that aliases edges and text). Every word, the artwork and the
+// progress bar are sheared and scaled vertically to their slice of the arc: upright edges stay
+// upright and horizontal ones follow the curve. Text blocks are sheared as a whole first, so their
+// clipping boxes follow the curve with their words. Buttons and icons move with the curve. Lyric
+// lines stay where lyrics-plus puts them and their words bend around each line's middle, so the
+// lyrics keep their usual height on screen. Only the blurred background is bent as an image.
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -54,7 +54,7 @@ const PIECES = [
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
-// Images and shapes too wide to move as a whole: they move, then a filter bends what is left.
+// Images and shapes too wide to move as a whole: sheared like words (no transform of their own).
 const BENT = ["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"].join(", ");
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
@@ -72,12 +72,10 @@ let bend = 0;
 let margins = { left: 0, right: 0 };
 let container: HTMLElement | null = null;
 let frame = 0;
-let filterCount = 0;
 let textObserver: MutationObserver | null = null;
 const sheared = new WeakMap<Element, Shear>();
 const moved = new WeakMap<Element, Move>();
 const written = new WeakMap<Element, string>();
-const filters = new WeakMap<Element, { key: string; id: string }>();
 
 export function setHudPerspectiveStrength(element: HTMLElement, value: number) {
     container = element;
@@ -118,20 +116,14 @@ function stop() {
     textObserver = null;
     if (!container) return;
     for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}`)) reset(element);
-    document.querySelectorAll(`#${DEFS} filter:not(.fsd-background-curve)`).forEach((filter) => filter.remove());
     joinWords();
 }
 
 function reset(element: HTMLElement) {
     for (const property of ["transform", "translate", "scale"]) element.style.removeProperty(property);
-    if (filters.has(element)) {
-        element.style.removeProperty("filter");
-        document.getElementById(filters.get(element)!.id)?.remove();
-    }
     sheared.delete(element);
     moved.delete(element);
     written.delete(element);
-    filters.delete(element);
 }
 
 // How deep into the curve x is: 1 at the centre, 0 at the HUD's margins (and a little below 0
@@ -185,31 +177,34 @@ function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
     return { left: box.left, top, width: box.width, height: box.height / last.tall, scale, origin: originY };
 }
 
-// Shears a block so its centre lands on the curve and its slope follows the curve there. Lyric
-// lines only move: their own transform places them.
-function placeBlock(block: HTMLElement, flat: Flat, isLine: boolean): Shear {
+// How far the curve moves a point vertically.
+const liftAt = (x: number, y: number) => curveY(x, y) - y;
+
+// Shears a text block so its centre lands on the curve and its slope follows the curve there.
+function placeBlock(block: HTMLElement, flat: Flat): Shear {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const shear = isLine ? 0 : (cy - midline()) * heightSlopeAt(cx);
-    const lift = curveY(cx, cy) - shear * (flat.width / 2) - flat.height / 2 - flat.top;
+    const shear = (cy - midline()) * heightSlopeAt(cx);
+    const lift = liftAt(cx, cy) - shear * (flat.width / 2);
     sheared.set(block, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(block) !== key) {
         written.set(block, key);
-        if (isLine) block.style.translate = `0 ${lift.toFixed(1)}px`;
-        else block.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
+        block.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
     }
     return { shear, lift };
 }
 
-// Shears and scales a word vertically to its slice of the curve, on top of what its block already
-// does to it.
-function placeWord(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number) {
+// Shears and scales a box (a word, the artwork, the progress bar) vertically to its slice of the
+// curve, on top of what its block already does to it. `pin` is subtracted from the curve's lift:
+// lyric words use their line's own lift there, so each line bends around its middle and stays at
+// its usual height.
+function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
     const totalShear = (cy - midline()) * heightSlopeAt(cx);
     const tall = heightAt(cx);
-    const targetTop = curveY(cx, cy) - totalShear * (flat.width / 2) - tall * (flat.height / 2);
+    const targetTop = cy + liftAt(cx, cy) - pin - totalShear * (flat.width / 2) - tall * (flat.height / 2);
     const shear = totalShear - (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
     const lift = targetTop - flat.top - parentLift;
@@ -280,22 +275,31 @@ function tick() {
         return shearedFlat(word, (block && sheared.get(block)) || null, flat?.left ?? 0);
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
-    const bentFlats = bent.map((element) => movedFlat(element));
+    const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
     const previousMargins = margins.left;
     updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
     if (Math.round(previousMargins) !== Math.round(margins.left)) updateBackground();
 
+    // Lyric lines are left where lyrics-plus puts them; their words bend around the line's middle.
     const blockNow = new Map<Element, Shear>();
+    const linePin = new Map<Element, number>();
     blocks.forEach((block, i) => {
         const flat = blockFlats[i];
-        if (flat && onScreen(flat)) blockNow.set(block, placeBlock(block, flat, block.matches(LYRIC_LINES)));
+        if (!flat || !onScreen(flat)) return;
+        if (block.matches(LYRIC_LINES)) {
+            linePin.set(block, liftAt(flat.left + flat.width / 2, flat.top + flat.height / 2));
+            blockNow.set(block, { shear: 0, lift: 0 });
+        } else {
+            blockNow.set(block, placeBlock(block, flat));
+        }
     });
     words.forEach((word, i) => {
         const flat = wordFlats[i];
         const block = wordBlocks[i];
         if (!flat) return;
         const blockFlat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
-        placeWord(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0);
+        const pin = (block && linePin.get(block)) || 0;
+        placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin);
     });
     pieces.forEach((piece, i) => {
         const flat = pieceFlats[i];
@@ -310,10 +314,10 @@ function tick() {
         const flat = bentFlats[i];
         if (!flat) return;
         if (!onScreen(flat)) {
-            if (moved.has(element)) reset(element);
+            if (sheared.has(element)) reset(element);
             return;
         }
-        bendRest(element, flat, placePiece(element, flat));
+        placeSheared(element, flat, null, 0);
     });
     frame = requestAnimationFrame(tick);
 }
@@ -376,31 +380,6 @@ function verticalShiftFilter(
         `<feImage href="${canvas.toDataURL()}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none" result="map"/>` +
         `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G"/>`;
     return filter;
-}
-
-// The element has been moved so its centre sits on the curve; this bends the rest of it. The
-// pixel drawn at the element's own point q shows the flat point whose curved position lands there.
-function bendRest(element: HTMLElement, flat: Flat & { origin: number }, move: Move) {
-    const width = element.offsetWidth;
-    const height = element.offsetHeight;
-    const key = [flat.left, flat.top, width, height, move.dy, margins.left].map(Math.round).join(",") + `|${bend}`;
-    if (filters.get(element)?.key === key) return;
-    const originY = flat.top + flat.origin;
-    const shift = (qx: number, qy: number) => {
-        const x = flat.left + qx * flat.scale;
-        const drawnY = originY + move.tall * (flat.top + qy * flat.scale - originY) + move.dy;
-        const flatY = midline() + (drawnY - midline()) / heightAt(x);
-        return (flatY - flat.top) / flat.scale - qy;
-    };
-    // Room around the element for its shadow and for what the curve lifts past its edges.
-    const corners = [shift(0, 0), shift(width, 0), shift(0, height), shift(width, height)];
-    const room = 24 + Math.ceil(Math.max(...corners.map(Math.abs)));
-    const id = `fsd-bend-${++filterCount}`;
-    const previous = filters.get(element);
-    defs().appendChild(verticalShiftFilter(id, -room, -room, width + 2 * room, height + 2 * room, shift));
-    element.style.filter = `url(#${id})`;
-    if (previous) document.getElementById(previous.id)?.remove();
-    filters.set(element, { key, id });
 }
 
 // Wraps each run of text in one inline line element holding one box per word. The line keeps the
