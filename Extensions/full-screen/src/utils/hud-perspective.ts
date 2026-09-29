@@ -6,10 +6,11 @@ import CFM from "./config";
 // closer it is to the middle of the screen, so rows of text, the progress bar and the artwork bend
 // in one smooth arc: rows below the midline arch up toward the middle, rows above it dip down.
 //
-// A point (x, y) is drawn at (x, cy + (y - cy) h(x)) with h(x) = 1 - k (1 + cos(pi u)) / 2, where
-// u is -1 at the HUD's left margin, 0 at the screen centre and 1 at its right margin. h is 1 at
-// the margins, so the HUD's outer edges and their gaps to the screen edge are unchanged, 1 - k in
-// the middle, and flat at both ends and in the middle, so the arc has no sharp point anywhere.
+// A point (x, y) is drawn at (x, cy + (y - cy) h(x)) with h(x) = 1 - k (1 - u^2), where u is -1 at
+// the HUD's left margin, 0 at the screen centre and 1 at its right margin. h is 1 at the margins,
+// so the HUD's outer edges and their gaps to the screen edge are unchanged, and 1 - k in the
+// middle. The arc is level in the middle (no sharp point) and keeps getting steeper all the way
+// out to the edges, like a curved screen, rather than flattening off near them.
 //
 // Text is not resampled (that loses anti-aliasing). Every word is sheared and scaled vertically to
 // its slice of the arc: its upright strokes stay upright and its baseline follows the curve. Text
@@ -20,8 +21,10 @@ import CFM from "./config";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline.
-const MAX_BEND = 0.2;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 0.09 matches
+// the user's terminal wallpaper (Wallpaper Engine), measured from how steeply its corner panels
+// slant toward the middle.
+const MAX_BEND = 0.09;
 
 const LYRIC_LINES = "#fad-lyrics-plus-container .lyrics-lyricsContainer-LyricsLine";
 // Text blocks bend as a whole and their words bend inside them. Lyric lines are placed by
@@ -131,15 +134,14 @@ function reset(element: HTMLElement) {
     filters.delete(element);
 }
 
-// How deep into the curve x is: 0 at the HUD's margins and beyond, rising smoothly to 1 at the
-// centre, and its slope.
+// How deep into the curve x is: 1 at the centre, 0 at the HUD's margins (and a little below 0
+// past them, so the curve carries on smoothly to the screen edge), and its slope.
 function depthAt(x: number) {
     const cx = window.innerWidth / 2;
     const half = x < cx ? cx - margins.left : margins.right - cx;
     if (half <= 0) return { depth: 0, slope: 0 };
     const u = (x - cx) / half;
-    if (Math.abs(u) >= 1) return { depth: 0, slope: 0 };
-    return { depth: (1 + Math.cos(Math.PI * u)) / 2, slope: -(Math.PI * Math.sin(Math.PI * u)) / (2 * half) };
+    return { depth: 1 - u * u, slope: (-2 * u) / half };
 }
 
 // h(x): how far the screen at x is drawn from the midline, relative to flat.

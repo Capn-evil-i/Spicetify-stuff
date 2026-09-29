@@ -15,15 +15,17 @@ const tvStyles = readFileSync(join(root, 'src', 'styles', 'tvMode.scss'), 'utf8'
 test('perspective strength sets the bend and compact layouts keep a gentler one', () => {
   assert.match(helper, /clamp\(Number\(value\) \|\| 0, 0, 100\)/);
   assert.match(helper, /window\.innerWidth <= 800 \? 0\.55 : 1/);
-  assert.match(helper, /const MAX_BEND = 0\.2;/);
+  assert.match(helper, /const MAX_BEND = 0\.09;/);
   assert.match(app, /setHudPerspectiveStrength\(DOM\.container, Number\(CFM\.get\("hudPerspectiveStrength"\)\)\)/);
   assert.match(config, /input\.oninput = \(\) =>[\s\S]*?setHudPerspectiveStrength\(DOM\.container, strength\)/);
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
 });
 
 test('the HUD bends like a screen curved inwards: rows arc, nothing stretches sideways or turns', () => {
-  // (x, y) -> (x, cy + (y - cy) h(x)), h = 1 - k (1 + cos(pi u)) / 2: 1 at the margins, smooth everywhere.
-  assert.match(helper, /return \{ depth: \(1 \+ Math\.cos\(Math\.PI \* u\)\) \/ 2, slope: /);
+  // (x, y) -> (x, cy + (y - cy) h(x)), h = 1 - k (1 - u^2): 1 at the margins, level in the middle,
+  // and steepest toward the edges instead of flattening off near them.
+  assert.match(helper, /return \{ depth: 1 - u \* u, slope: \(-2 \* u\) \/ half \};/);
+  assert.doesNotMatch(helper, /Math\.cos\(Math\.PI \* u\)/);
   assert.match(helper, /const curveY = \(x: number, y: number\) => midline\(\) \+ \(y - midline\(\)\) \* heightAt\(x\);/);
   // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
