@@ -71,7 +71,7 @@
             "right": "Right"
         },
         "hudPerspective": "Perspective HUD",
-        "hudPerspectiveDescription": "Lay the TV overlay out on a screen curved inwards, like a HUD lens: the sides come closer and are drawn bigger, the middle recedes, mainly sideways. Also adjustable from the slider in the bottom-left corner.",
+        "hudPerspectiveDescription": "Bend the TV overlay as if the screen were curved inwards, like a HUD lens: rows of text, the progress bar and the artwork arc toward the middle. Nothing is stretched sideways. Also adjustable from the slider in the bottom-left corner.",
         "hudPerspectiveStrength": "Perspective strength",
         "hudPerspectiveStrengthDescription": "How strongly the screen curves. The compact layout uses a gentler curve.",
         "hudPerspectiveBackground": "Curve the background",

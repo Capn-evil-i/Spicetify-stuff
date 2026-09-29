@@ -12,45 +12,46 @@ const htmlCreator = readFileSync(join(root, 'src', 'services', 'html-creator.ts'
 const baseStyles = readFileSync(join(root, 'src', 'styles', 'base.scss'), 'utf8');
 const tvStyles = readFileSync(join(root, 'src', 'styles', 'tvMode.scss'), 'utf8');
 
-test('perspective strength sets the fisheye and compact layouts keep a gentler one', () => {
+test('perspective strength sets the bend and compact layouts keep a gentler one', () => {
   assert.match(helper, /clamp\(Number\(value\) \|\| 0, 0, 100\)/);
   assert.match(helper, /window\.innerWidth <= 800 \? 0\.55 : 1/);
-  assert.match(helper, /const MAX_WARP = /);
+  assert.match(helper, /const MAX_BEND = 0\.2;/);
   assert.match(app, /setHudPerspectiveStrength\(DOM\.container, Number\(CFM\.get\("hudPerspectiveStrength"\)\)\)/);
   assert.match(config, /input\.oninput = \(\) =>[\s\S]*?setHudPerspectiveStrength\(DOM\.container, strength\)/);
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
 });
 
-test('the HUD is laid out on a screen curved inwards, mainly horizontally, without tilting', () => {
-  // f(u) = u - k sin(pi u) / pi: f(+-1) = +-1, the sides drawn wider (closer), the middle narrower.
-  assert.match(helper, /return u - \(warp \* Math\.sin\(Math\.PI \* u\)\) \/ Math\.PI;/);
+test('the HUD bends like a screen curved inwards: rows arc, nothing stretches sideways or turns', () => {
+  // (x, y) -> (x, cy + (y - cy) h(x)), h = 1 - k (1 + cos(pi u)) / 2: 1 at the margins, smooth everywhere.
+  assert.match(helper, /return \{ depth: \(1 \+ Math\.cos\(Math\.PI \* u\)\) \/ 2, slope: /);
+  assert.match(helper, /const curveY = \(x: number, y: number\) => midline\(\) \+ \(y - midline\(\)\) \* heightAt\(x\);/);
   // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
-  assert.match(helper, /function updateMargins\(/);
-  // Height follows only a share of the width change, and nothing moves vertically or turns.
-  assert.match(helper, /const VERTICAL = 0\.3;/);
-  assert.match(helper, /piece\.style\.translate = `\$\{shift\.toFixed\(1\)\}px 0`/);
-  assert.match(helper, /piece\.style\.scale = `\$\{stretch\.toFixed\(3\)\} \$\{ownTall\.toFixed\(3\)\}`/);
-  assert.doesNotMatch(helper, /style\.rotate/, 'nothing is tilted');
-  // Lyric lines bend word by word like the title, and words stay inside their scaled block.
+  // Words are sheared (upright strokes stay upright) and scaled only vertically; no sideways scale.
+  assert.match(helper, /word\.style\.transform = `matrix\(1, \$\{shear\.toFixed\(4\)\}, 0, \$\{tall\.toFixed\(3\)\}, 0, /);
+  assert.match(helper, /piece\.style\.translate = `0 \$\{dy\.toFixed\(1\)\}px`/);
+  assert.match(helper, /piece\.style\.scale = `1 \$\{tall\.toFixed\(3\)\}`/);
+  assert.doesNotMatch(helper, /style\.rotate|rotate\(/, 'nothing turns');
+  // Text blocks are sheared as a whole so their clipping follows the curve; lyric lines only move,
+  // because lyrics-plus places them with its own transform.
+  assert.match(helper, /if \(isLine\) block\.style\.translate = `0 \$\{lift\.toFixed\(1\)\}px`;/);
   assert.match(helper, /const BLOCKS = \[[\s\S]*?LYRIC_LINES,\s*\]\.join/);
-  assert.match(helper, /place\(word, flat, \(block && blockNow\.get\(block\)\) \|\| IDENTITY\)/);
-  // Lyric lines move by their own vertical transform, so only their words change height.
-  assert.match(helper, /blockNow\.set\(block, place\(block, flat, IDENTITY, false\)\)/);
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
-  assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;/);
-  assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not warped under the pointer');
+  assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
+  // The artwork and progress bar bend through a vertical-only displacement filter.
+  assert.match(helper, /const BENT = \["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"\]/);
+  assert.match(helper, /image\.data\[p \* 4\] = 128;/);
+  assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
   assert.doesNotMatch(tvStyles, /\.hud-perspective\s*\{[\s\S]*?#fsd-overview-card\s*\{\s*left: auto;/, 'the clock card stays where it is');
 });
 
-test('only the blurred background is warped as an image, and it can be turned off', () => {
+test('the blurred background bends too, never from outside the image, and it can be turned off', () => {
   assert.match(helper, /feDisplacementMap/);
   assert.match(helper, /xChannelSelector="R" yChannelSelector="G"/);
-  // The background never samples from outside the image.
-  assert.match(helper, /tall\[i\] = \(1 \+ VERTICAL \* \(slope\(u\) - 1\)\) \/ shortest;/);
+  assert.match(helper, /const lowest = 1 - bend;/);
   assert.match(helper, /CFM\.get\("hudPerspectiveBackground"\)/);
   assert.match(helper, /#fsd-background/);
 });

@@ -363,11 +363,21 @@
 }
 
 // Perspective HUD (see utils/hud-perspective.ts): words are split into boxes so each can follow
-// the curve (transforms need a box, not an inline run). Text blocks keep clipping for their line
-// clamps, with a little room for the words' own turn along the curve.
+// the curve (transforms need a box, not an inline run). Words and text blocks are sheared from
+// their top-left corner. Text blocks keep clipping for their line clamps, with a little room for
+// what their words bend past the block's own slope.
 #full-screen-display[mode="tv"].hud-perspective {
     fsd-curve-word {
         display: inline-block;
+        transform-origin: 0 0;
+    }
+
+    #fsd-ctx-details,
+    #fsd-title > span,
+    #fsd-artist > span,
+    #fsd-album > span,
+    #fsd_up_next_text {
+        transform-origin: 0 0;
     }
 
     // These icons animate every property; the curve moves them each frame, so its offsets must

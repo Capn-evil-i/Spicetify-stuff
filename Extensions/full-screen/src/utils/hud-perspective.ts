@@ -1,31 +1,31 @@
 import CFM from "./config";
 
-// Perspective HUD: simulates the TV overlay on a screen curved inwards, like a HUD lens. The sides
-// of a concave screen are closer to the viewer, so things there are drawn bigger and the middle
-// recedes; text and artwork bend toward the middle. The warp is mainly horizontal: things are
-// also made a little taller at the sides and shorter in the middle, but nothing moves up or down
-// and nothing turns.
+// Perspective HUD: simulates the TV overlay on a screen curved inwards around a vertical axis, like
+// a curved monitor or a HUD lens. Nothing is stretched sideways and nothing turns. Every point
+// keeps its horizontal position and is pulled toward the screen's horizontal midline, more the
+// closer it is to the middle of the screen, so rows of text, the progress bar and the artwork bend
+// in one smooth arc: rows below the midline arch up toward the middle, rows above it dip down.
 //
-// The warp is pinned at the HUD's own side margins, so the gap between the screen edge and the
-// artwork or lyrics is the same with the effect on or off. Between the margins a point at u
-// (-1 left margin, 0 centre, 1 right margin) is drawn at f(u) = u - k sin(pi u) / pi: the margins
-// stay put, the centre is drawn 1 - k as wide and the margins 1 + k as wide, and the curve is
-// smooth everywhere, so there is no seam in the middle.
+// A point (x, y) is drawn at (x, cy + (y - cy) h(x)) with h(x) = 1 - k (1 + cos(pi u)) / 2, where
+// u is -1 at the HUD's left margin, 0 at the screen centre and 1 at its right margin. h is 1 at
+// the margins, so the HUD's outer edges and their gaps to the screen edge are unchanged, 1 - k in
+// the middle, and flat at both ends and in the middle, so the arc has no sharp point anywhere.
 //
-// Text is not resampled (that loses anti-aliasing): text blocks and lyric lines, their words,
-// buttons and images are each moved and scaled to cover exactly their own slice of the curve.
-// The blurred background is warped as an image with an SVG displacement filter.
+// Text is not resampled (that loses anti-aliasing). Every word is sheared and scaled vertically to
+// its slice of the arc: its upright strokes stay upright and its baseline follows the curve. Text
+// blocks are sheared as a whole first, so their clipping boxes follow the curve with their words.
+// Buttons and icons move with the curve. The artwork and progress bar bend through a small SVG
+// displacement filter for what their move leaves over, and the blurred background bends the same
+// way.
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the centre is drawn 1 - MAX_WARP as wide and the margins 1 + MAX_WARP as wide.
-const MAX_WARP = 0.4;
-// How much of the width change is also applied to the height.
-const VERTICAL = 0.3;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline.
+const MAX_BEND = 0.2;
 
 const LYRIC_LINES = "#fad-lyrics-plus-container .lyrics-lyricsContainer-LyricsLine";
-// Text blocks and lyric lines are scaled as a whole; their words then take only their own
-// difference, which keeps every word inside its block's clipping box.
+// Text blocks bend as a whole and their words bend inside them. Lyric lines are placed by
+// lyrics-plus's own transform, so they only move; the others are sheared.
 const BLOCKS = [
     "#fsd-ctx-details",
     "#fsd-title > span",
@@ -36,48 +36,51 @@ const BLOCKS = [
 ].join(", ");
 const LINE = "fsd-curve-line";
 const WORD = "fsd-curve-word";
-// The perspective slider itself is left flat: warping it would move the track under the pointer
-// while it is being dragged.
+// Small pieces that move with the curve as a whole. The perspective slider itself is left flat:
+// bending it would move the track under the pointer while it is being dragged.
 const PIECES = [
-    "#fsd-art",
     "#fsd-ctx-icon",
     "#fsd-title > svg",
     "#fsd-artist > svg",
     "#fsd-album > svg",
     ".fsd-controls button",
     ".extra-controls button",
-    "#fsd-progress-container > *",
-    "#fsd_next_art",
+    "#fsd-elapsed",
+    "#fsd-duration",
     "#fsd_next_tit_art",
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
+// Images and shapes too wide to move as a whole: they move, then a filter bends what is left.
+const BENT = ["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"].join(", ");
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
+const DEFS = "fsd-curve-defs";
 
-type Applied = { shift: number; stretch: number };
-// A piece's box on the flat layout, and where its transform origin sits on it.
-type Flat = { left: number; right: number; top: number; bottom: number; origin: number };
-// x -> origin + stretch * (x - origin) + shift, which is what `translate` plus `scale` draw.
-// `tall` is the total vertical scale, which the words inside a block divide by.
-type Mapping = Applied & { origin: number; tall: number };
+// A sheared box: its top-left corner is lifted by `lift` screen px and each px to the right is
+// lifted `shear` px more.
+type Shear = { shear: number; lift: number };
+// A box on the flat layout, in screen px, and the scale its ancestors draw it at.
+type Flat = { left: number; top: number; width: number; height: number; scale: number };
+// A piece moved as a whole: vertical offset and vertical scale about its transform origin.
+type Move = { dy: number; tall: number };
 
-const IDENTITY: Mapping = { origin: 0, shift: 0, stretch: 1, tall: 1 };
-const backward = (m: Mapping, y: number) => m.origin + (y - m.shift - m.origin) / m.stretch;
-
-let warp = 0;
+let bend = 0;
 let margins = { left: 0, right: 0 };
 let container: HTMLElement | null = null;
 let frame = 0;
+let filterCount = 0;
 let textObserver: MutationObserver | null = null;
-const applied = new WeakMap<Element, Applied>();
+const sheared = new WeakMap<Element, Shear>();
+const moved = new WeakMap<Element, Move>();
 const written = new WeakMap<Element, string>();
+const filters = new WeakMap<Element, { key: string; id: string }>();
 
 export function setHudPerspectiveStrength(element: HTMLElement, value: number) {
     container = element;
     const normalized = clamp(Number(value) || 0, 0, 100) / 100;
     const compactScale = window.innerWidth <= 800 ? 0.55 : 1;
-    warp = MAX_WARP * normalized * compactScale;
+    bend = MAX_BEND * normalized * compactScale;
     if (active()) start();
     else stop();
     updateBackground();
@@ -88,7 +91,7 @@ function active() {
         container?.isConnected &&
             container.classList.contains("hud-perspective") &&
             document.body.classList.contains("fsd-activated") &&
-            warp > 0,
+            bend > 0,
     );
 }
 
@@ -111,82 +114,131 @@ function stop() {
     textObserver?.disconnect();
     textObserver = null;
     if (!container) return;
-    for (const piece of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${PIECES}, ${WORD}`)) reset(piece);
+    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}`)) reset(element);
+    document.querySelectorAll(`#${DEFS} filter:not(.fsd-background-curve)`).forEach((filter) => filter.remove());
     joinWords();
 }
 
-function reset(piece: HTMLElement) {
-    piece.style.removeProperty("translate");
-    piece.style.removeProperty("scale");
-    applied.delete(piece);
-    written.delete(piece);
+function reset(element: HTMLElement) {
+    for (const property of ["transform", "translate", "scale"]) element.style.removeProperty(property);
+    if (filters.has(element)) {
+        element.style.removeProperty("filter");
+        document.getElementById(filters.get(element)!.id)?.remove();
+    }
+    sheared.delete(element);
+    moved.delete(element);
+    written.delete(element);
+    filters.delete(element);
 }
 
-// f(u) = u - k sin(pi u) / pi: f(+-1) = +-1, slope 1 - k at the centre and 1 + k at the ends.
-function profile(u: number) {
-    return u - (warp * Math.sin(Math.PI * u)) / Math.PI;
-}
-
-function slope(u: number) {
-    return 1 - warp * Math.cos(Math.PI * u);
-}
-
-// Where the curved screen draws screen position x. Outside the margins nothing moves.
-function curve(x: number) {
+// How deep into the curve x is: 0 at the HUD's margins and beyond, rising smoothly to 1 at the
+// centre, and its slope.
+function depthAt(x: number) {
     const cx = window.innerWidth / 2;
     const half = x < cx ? cx - margins.left : margins.right - cx;
-    if (half <= 0) return x;
+    if (half <= 0) return { depth: 0, slope: 0 };
     const u = (x - cx) / half;
-    if (Math.abs(u) >= 1) return x;
-    return cx + half * profile(u);
+    if (Math.abs(u) >= 1) return { depth: 0, slope: 0 };
+    return { depth: (1 + Math.cos(Math.PI * u)) / 2, slope: -(Math.PI * Math.sin(Math.PI * u)) / (2 * half) };
 }
 
-// The piece's box on the flat layout: undoes its parent block's transform, then its own from the
-// last frame.
-function flatBox(piece: HTMLElement, parent: Mapping): Flat | null {
-    const box = piece.getBoundingClientRect();
-    if (!box.width || !box.height) return null;
-    const last = applied.get(piece) ?? { shift: 0, stretch: 1 };
-    const shownLeft = backward(parent, box.left);
-    const width = (backward(parent, box.right) - shownLeft) / last.stretch;
-    // Our stretch is about the piece's transform origin, which keeps its own transform's scale.
-    const ownScale = piece.offsetWidth ? width / piece.offsetWidth : 1;
-    const offset = (parseFloat(getComputedStyle(piece).transformOrigin) || 0) * ownScale;
-    const left = shownLeft - last.shift + offset * (last.stretch - 1);
-    return { left, right: left + width, top: box.top, bottom: box.bottom, origin: left + offset };
+// h(x): how far the screen at x is drawn from the midline, relative to flat.
+function heightAt(x: number) {
+    return 1 - bend * depthAt(x).depth;
 }
 
-// Moves and scales the piece so its flat box [left, right] is drawn over
-// [curve(left), curve(right)], given what its parent block already does to it. Its height follows
-// a share of the same change, about its own middle. Blocks keep their height and leave it to their
-// words: lyric lines are positioned by their own vertical transform, which a height scale would
-// multiply and so move the line.
-function place(piece: HTMLElement, flat: Flat, parent: Mapping, upright = true): Mapping {
-    const targetLeft = curve(flat.left);
-    const targetRight = curve(flat.right);
-    const left = backward(parent, targetLeft);
-    const right = backward(parent, targetRight);
-    const stretch = (right - left) / (flat.right - flat.left);
-    const shift = left - flat.origin - stretch * (flat.left - flat.origin);
-    const wide = (targetRight - targetLeft) / (flat.right - flat.left);
-    const tall = upright ? 1 + VERTICAL * (wide - 1) : 1;
-    const ownTall = tall / parent.tall;
-    applied.set(piece, { shift, stretch });
-    const key = `${shift.toFixed(1)}|${stretch.toFixed(3)}|${ownTall.toFixed(3)}`;
-    if (written.get(piece) !== key) {
-        written.set(piece, key);
-        piece.style.translate = `${shift.toFixed(1)}px 0`;
-        piece.style.scale = `${stretch.toFixed(3)} ${ownTall.toFixed(3)}`;
-    }
-    return { origin: flat.origin, shift, stretch, tall };
+// dh/dx.
+function heightSlopeAt(x: number) {
+    return -bend * depthAt(x).slope;
 }
+
+const midline = () => window.innerHeight / 2;
+const curveY = (x: number, y: number) => midline() + (y - midline()) * heightAt(x);
 
 function onScreen(box: Flat) {
-    return box.right > 0 && box.left < window.innerWidth && box.bottom > 0 && box.top < window.innerHeight;
+    return box.left + box.width > 0 && box.left < window.innerWidth && box.top + box.height > 0 && box.top < window.innerHeight;
+}
+
+// A sheared box's flat layout: it never moves sideways, and its top-left corner was lifted by its
+// own last lift plus whatever its block's shear and lift did at that point.
+function shearedFlat(element: HTMLElement, parent: Shear | null, parentLeft: number): Flat | null {
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height || !element.offsetWidth) return null;
+    const last = sheared.get(element) ?? { shear: 0, lift: 0 };
+    const scale = box.width / element.offsetWidth;
+    const shear = last.shear + (parent?.shear ?? 0);
+    const parentLift = parent ? parent.lift + parent.shear * (box.left - parentLeft) : 0;
+    const top = box.top - Math.min(0, shear * box.width) - last.lift - parentLift;
+    return { left: box.left, top, width: box.width, height: element.offsetHeight * scale, scale };
+}
+
+// A piece's flat layout: undoes its last vertical move and scale about its transform origin.
+function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
+    const last = moved.get(element) ?? { dy: 0, tall: 1 };
+    const scale = element.offsetWidth ? box.width / element.offsetWidth : 1;
+    const originY = (parseFloat(getComputedStyle(element).transformOrigin.split(" ")[1]) || 0) * scale;
+    const top = box.top - last.dy - originY * (1 - last.tall);
+    return { left: box.left, top, width: box.width, height: box.height / last.tall, scale, origin: originY };
+}
+
+// Shears a block so its centre lands on the curve and its slope follows the curve there. Lyric
+// lines only move: their own transform places them.
+function placeBlock(block: HTMLElement, flat: Flat, isLine: boolean): Shear {
+    const cx = flat.left + flat.width / 2;
+    const cy = flat.top + flat.height / 2;
+    const shear = isLine ? 0 : (cy - midline()) * heightSlopeAt(cx);
+    const lift = curveY(cx, cy) - shear * (flat.width / 2) - flat.height / 2 - flat.top;
+    sheared.set(block, { shear, lift });
+    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
+    if (written.get(block) !== key) {
+        written.set(block, key);
+        if (isLine) block.style.translate = `0 ${lift.toFixed(1)}px`;
+        else block.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
+    }
+    return { shear, lift };
+}
+
+// Shears and scales a word vertically to its slice of the curve, on top of what its block already
+// does to it.
+function placeWord(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number) {
+    const cx = flat.left + flat.width / 2;
+    const cy = flat.top + flat.height / 2;
+    const totalShear = (cy - midline()) * heightSlopeAt(cx);
+    const tall = heightAt(cx);
+    const targetTop = curveY(cx, cy) - totalShear * (flat.width / 2) - tall * (flat.height / 2);
+    const shear = totalShear - (parent?.shear ?? 0);
+    const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
+    const lift = targetTop - flat.top - parentLift;
+    sheared.set(word, { shear, lift });
+    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${lift.toFixed(1)}`;
+    if (written.get(word) !== key) {
+        written.set(word, key);
+        word.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, ${tall.toFixed(3)}, 0, ${(lift / flat.scale).toFixed(2)})`;
+    }
+}
+
+// Moves a piece so its centre lands on the curve, scaled to the curve's height there.
+function placePiece(piece: HTMLElement, flat: Flat & { origin: number }): Move {
+    const cx = flat.left + flat.width / 2;
+    const cy = flat.top + flat.height / 2;
+    const tall = heightAt(cx);
+    const origin = flat.top + flat.origin;
+    const dy = curveY(cx, cy) - origin - tall * (cy - origin);
+    const move = { dy, tall };
+    moved.set(piece, move);
+    const key = `${dy.toFixed(1)}|${tall.toFixed(3)}`;
+    if (written.get(piece) !== key) {
+        written.set(piece, key);
+        piece.style.translate = `0 ${dy.toFixed(1)}px`;
+        piece.style.scale = `1 ${tall.toFixed(3)}`;
+    }
+    return move;
 }
 
 // The HUD's side margin: the gap left of the context icon or artwork, or right of the lyrics,
-// whichever is smaller, used on both sides so the warp stays centred on the screen.
+// whichever is smaller, used on both sides so the curve stays centred on the screen.
 function updateMargins(elements: HTMLElement[], flats: (Flat | null)[]) {
     const width = window.innerWidth;
     let margin = Infinity;
@@ -194,7 +246,7 @@ function updateMargins(elements: HTMLElement[], flats: (Flat | null)[]) {
         const flat = flats[i];
         if (!flat || !onScreen(flat)) return;
         if (element.matches(LEFT_EDGE)) margin = Math.min(margin, flat.left);
-        else if (element.matches(LYRIC_LINES)) margin = Math.min(margin, width - flat.right);
+        else if (element.matches(LYRIC_LINES)) margin = Math.min(margin, width - flat.left - flat.width);
     });
     margin = Number.isFinite(margin) ? clamp(margin, 0, width / 4) : 0;
     margins = { left: margin, right: width - margin };
@@ -212,45 +264,141 @@ function tick() {
     const blocks = Array.from(container.querySelectorAll<HTMLElement>(BLOCKS));
     const words = Array.from(container.querySelectorAll<HTMLElement>(WORD));
     const pieces = Array.from(container.querySelectorAll<HTMLElement>(PIECES));
+    const bent = Array.from(container.querySelectorAll<HTMLElement>(BENT));
+
     // Read every position first, then write, so the frame lays out once.
-    const blockFlats = blocks.map((block) => flatBox(block, IDENTITY));
-    const lastBlock = new Map<Element, Mapping>();
-    blocks.forEach((block, i) => {
-        const flat = blockFlats[i];
-        const last = applied.get(block);
-        if (flat && last && onScreen(flat)) lastBlock.set(block, { origin: flat.origin, tall: 1, ...last });
-    });
-    // Words of blocks off screen (lyrics far from the current line) are left until they scroll in.
+    const blockFlats = blocks.map((block) => shearedFlat(block, null, 0));
+    const blockIndex = new Map(blocks.map((block, i) => [block as Element, i]));
     const wordBlocks = words.map((word) => word.closest<HTMLElement>(BLOCKS));
     const wordFlats = words.map((word, i) => {
         const block = wordBlocks[i];
-        const flat = block && blockFlats[blocks.indexOf(block)];
+        const flat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
+        // Words of blocks off screen (lyrics far from the current line) wait until they scroll in.
         if (block && (!flat || !onScreen(flat))) return null;
-        return flatBox(word, (block && lastBlock.get(block)) || IDENTITY);
+        return shearedFlat(word, (block && sheared.get(block)) || null, flat?.left ?? 0);
     });
-    const pieceFlats = pieces.map((piece) => flatBox(piece, IDENTITY));
-    updateMargins([...pieces, ...blocks], [...pieceFlats, ...blockFlats]);
+    const pieceFlats = pieces.map((piece) => movedFlat(piece));
+    const bentFlats = bent.map((element) => movedFlat(element));
+    const previousMargins = margins.left;
+    updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
+    if (Math.round(previousMargins) !== Math.round(margins.left)) updateBackground();
 
-    const blockNow = new Map<Element, Mapping>();
+    const blockNow = new Map<Element, Shear>();
     blocks.forEach((block, i) => {
         const flat = blockFlats[i];
-        if (flat && onScreen(flat)) blockNow.set(block, place(block, flat, IDENTITY, false));
+        if (flat && onScreen(flat)) blockNow.set(block, placeBlock(block, flat, block.matches(LYRIC_LINES)));
     });
     words.forEach((word, i) => {
         const flat = wordFlats[i];
         const block = wordBlocks[i];
-        if (flat) place(word, flat, (block && blockNow.get(block)) || IDENTITY);
+        if (!flat) return;
+        const blockFlat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
+        placeWord(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0);
     });
     pieces.forEach((piece, i) => {
         const flat = pieceFlats[i];
         if (!flat) return;
         if (!onScreen(flat)) {
-            if (applied.has(piece)) reset(piece);
+            if (moved.has(piece)) reset(piece);
             return;
         }
-        place(piece, flat, IDENTITY);
+        placePiece(piece, flat);
+    });
+    bent.forEach((element, i) => {
+        const flat = bentFlats[i];
+        if (!flat) return;
+        if (!onScreen(flat)) {
+            if (moved.has(element)) reset(element);
+            return;
+        }
+        bendRest(element, flat, placePiece(element, flat));
     });
     frame = requestAnimationFrame(tick);
+}
+
+function defs() {
+    let svg = document.getElementById(DEFS) as SVGSVGElement | null;
+    if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.id = DEFS;
+        svg.setAttribute("width", "0");
+        svg.setAttribute("height", "0");
+        svg.style.position = "absolute";
+        document.body.appendChild(svg);
+    }
+    return svg;
+}
+
+// A filter that only moves pixels vertically: the output at (x, y) shows the input at
+// (x, y + shift(x, y)), over the region [x, x + width] x [y, y + height] of the element's own px.
+function verticalShiftFilter(
+    id: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    shift: (x: number, y: number) => number,
+    className = "",
+) {
+    const mapWidth = Math.max(2, Math.round(width / 4));
+    const mapHeight = Math.max(2, Math.round(height / 4));
+    const shifts = new Float32Array(mapWidth * mapHeight);
+    let most = 0;
+    for (let j = 0; j < mapHeight; j++) {
+        for (let i = 0; i < mapWidth; i++) {
+            const value = shift(x + ((i + 0.5) / mapWidth) * width, y + ((j + 0.5) / mapHeight) * height);
+            shifts[j * mapWidth + i] = value;
+            most = Math.max(most, Math.abs(value));
+        }
+    }
+    const range = Math.ceil(most * 2 * 1.02) || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = mapWidth;
+    canvas.height = mapHeight;
+    const context = canvas.getContext("2d")!;
+    const image = context.createImageData(mapWidth, mapHeight);
+    shifts.forEach((value, p) => {
+        image.data[p * 4] = 128;
+        image.data[p * 4 + 1] = Math.round(128 + (value / range) * 255);
+        image.data[p * 4 + 2] = 128;
+        image.data[p * 4 + 3] = 255;
+    });
+    context.putImageData(image, 0, 0);
+    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    filter.id = id;
+    if (className) filter.setAttribute("class", className);
+    for (const [name, value] of Object.entries({ x, y, width, height })) filter.setAttribute(name, String(value));
+    filter.setAttribute("filterUnits", "userSpaceOnUse");
+    filter.setAttribute("color-interpolation-filters", "sRGB");
+    filter.innerHTML =
+        `<feImage href="${canvas.toDataURL()}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none" result="map"/>` +
+        `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G"/>`;
+    return filter;
+}
+
+// The element has been moved so its centre sits on the curve; this bends the rest of it. The
+// pixel drawn at the element's own point q shows the flat point whose curved position lands there.
+function bendRest(element: HTMLElement, flat: Flat & { origin: number }, move: Move) {
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    const key = [flat.left, flat.top, width, height, move.dy, margins.left].map(Math.round).join(",") + `|${bend}`;
+    if (filters.get(element)?.key === key) return;
+    const originY = flat.top + flat.origin;
+    const shift = (qx: number, qy: number) => {
+        const x = flat.left + qx * flat.scale;
+        const drawnY = originY + move.tall * (flat.top + qy * flat.scale - originY) + move.dy;
+        const flatY = midline() + (drawnY - midline()) / heightAt(x);
+        return (flatY - flat.top) / flat.scale - qy;
+    };
+    // Room around the element for its shadow and for what the curve lifts past its edges.
+    const corners = [shift(0, 0), shift(width, 0), shift(0, height), shift(width, height)];
+    const room = 24 + Math.ceil(Math.max(...corners.map(Math.abs)));
+    const id = `fsd-bend-${++filterCount}`;
+    const previous = filters.get(element);
+    defs().appendChild(verticalShiftFilter(id, -room, -room, width + 2 * room, height + 2 * room, shift));
+    element.style.filter = `url(#${id})`;
+    if (previous) document.getElementById(previous.id)?.remove();
+    filters.set(element, { key, id });
 }
 
 // Wraps each run of text in one inline line element holding one box per word. The line keeps the
@@ -293,77 +441,35 @@ function joinWords() {
     parents.forEach((parent) => parent.normalize());
 }
 
-// The background is blurred, so warping it as an image looks clean.
+// The background is blurred, so bending it as an image looks clean. Its rows are pulled toward
+// the midline like the HUD's, scaled so the flattest column keeps its full height and no pixel is
+// taken from outside the image.
 function updateBackground() {
     const canvas = container?.querySelector<HTMLCanvasElement>("#fsd-background");
     if (!canvas) return;
     if (!active() || !CFM.get("hudPerspectiveBackground")) {
         canvas.style.removeProperty("filter");
+        document.querySelectorAll(`#${DEFS} .fsd-background-curve`).forEach((filter) => filter.remove());
         return;
     }
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
-    const id = `fsd-curve-${Math.round(warp * 1000)}-${width}x${height}`;
+    // The filter works in the canvas's own px; the animated background is drawn scaled up.
+    const box = canvas.getBoundingClientRect();
+    if (!width || !height || !box.width || !box.height) return;
+    const scaleX = box.width / width;
+    const scaleY = box.height / height;
+    const place = [bend * 1000, margins.left, box.left, box.top, box.width, box.height].map(Math.round).join("-");
+    const id = `fsd-background-curve-${place}-${width}x${height}`;
     if (!document.getElementById(id)) {
-        document.getElementById("fsd-curve-filters")?.remove();
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.id = "fsd-curve-filters";
-        svg.setAttribute("width", "0");
-        svg.setAttribute("height", "0");
-        svg.style.position = "absolute";
-        const { map, scale } = displacementMap(width, height);
-        svg.innerHTML =
-            `<filter id="${id}" x="0" y="0" width="${width}" height="${height}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
-            `<feImage href="${map}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" result="map"/>` +
-            `<feDisplacementMap in="SourceGraphic" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G"/></filter>`;
-        document.body.appendChild(svg);
+        document.querySelectorAll(`#${DEFS} .fsd-background-curve`).forEach((filter) => filter.remove());
+        const lowest = 1 - bend;
+        const shift = (x: number, y: number) => {
+            const drawnY = box.top + y * scaleY;
+            const flatY = midline() + ((drawnY - midline()) * lowest) / heightAt(box.left + x * scaleX);
+            return (flatY - box.top) / scaleY - y;
+        };
+        defs().appendChild(verticalShiftFilter(id, 0, 0, width, height, shift, "fsd-background-curve"));
     }
     canvas.style.filter = `url(#${id})`;
-}
-
-// Each output pixel takes the flat image from where the curve moved it: the column is f inverted,
-// and the row is pulled toward the middle by that column's height scale. The background has no
-// margins, so it is warped edge to edge, and its height scale never drops below 1 so no pixel is
-// taken from outside the image.
-function displacementMap(width: number, height: number) {
-    const cx = width / 2;
-    const cy = height / 2;
-    // f is strictly increasing (slope >= 1 - k > 0), so a few Newton steps invert it.
-    const inverse = (v: number) => {
-        let u = v;
-        for (let i = 0; i < 6; i++) u -= (profile(u) - v) / slope(u);
-        return u;
-    };
-    const shortest = 1 + VERTICAL * (slope(0) - 1);
-    const mapWidth = Math.max(2, Math.round(width / 4));
-    const mapHeight = Math.max(2, Math.round(height / 4));
-    const dx = new Float32Array(mapWidth);
-    const tall = new Float32Array(mapWidth);
-    let maxShift = 0;
-    for (let i = 0; i < mapWidth; i++) {
-        const v = (i / (mapWidth - 1)) * 2 - 1;
-        const u = inverse(v);
-        dx[i] = (u - v) * cx;
-        tall[i] = (1 + VERTICAL * (slope(u) - 1)) / shortest;
-        maxShift = Math.max(maxShift, Math.abs(dx[i]), cy * (1 - 1 / tall[i]));
-    }
-    const range = Math.ceil(maxShift * 2 * 1.02) || 1;
-    const canvas = document.createElement("canvas");
-    canvas.width = mapWidth;
-    canvas.height = mapHeight;
-    const context = canvas.getContext("2d")!;
-    const image = context.createImageData(mapWidth, mapHeight);
-    for (let j = 0; j < mapHeight; j++) {
-        const y = (j / (mapHeight - 1)) * height;
-        for (let i = 0; i < mapWidth; i++) {
-            const dy = (y - cy) / tall[i] + cy - y;
-            const p = (j * mapWidth + i) * 4;
-            image.data[p] = Math.round(128 + (dx[i] / range) * 255);
-            image.data[p + 1] = Math.round(128 + (dy / range) * 255);
-            image.data[p + 2] = 128;
-            image.data[p + 3] = 255;
-        }
-    }
-    context.putImageData(image, 0, 0);
-    return { map: canvas.toDataURL(), scale: range };
 }
