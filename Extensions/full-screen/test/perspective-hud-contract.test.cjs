@@ -22,8 +22,14 @@ test('perspective strength sets the fisheye and compact layouts keep a gentler o
 });
 
 test('the fisheye is horizontal only, smooth, and keeps the edges', () => {
-  // g(u) = u(1 + k) / (1 + k u^2): g(+-1) = +-1, centre magnified by 1 + k, no seam at u = 0.
-  assert.match(helper, /return cx \+ \(cx \* u \* \(1 \+ warp\)\) \/ \(1 \+ warp \* u \* u\);/);
+  // f(u) = u + k sin(pi u) / pi: f(+-1) = +-1, centre magnified by 1 + k, no seam at u = 0.
+  assert.match(helper, /return u \+ \(warp \* Math\.sin\(Math\.PI \* u\)\) \/ Math\.PI;/);
+  // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
+  assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
+  assert.match(helper, /function updateMargins\(/);
+  // Words are placed inside their stretched block, so they never leave its clipping box.
+  assert.match(helper, /place\(word, flat, \(wordBlocks\[i\] && blockNow\.get\(wordBlocks\[i\]!\)\) \|\| IDENTITY\)/);
+  assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not warped under the pointer');
   assert.match(helper, /piece\.style\.translate = `\$\{shift\.toFixed\(1\)\}px 0`/);
   assert.match(helper, /piece\.style\.scale = `\$\{stretch\.toFixed\(3\)\} 1`/);
   assert.doesNotMatch(helper, /style\.rotate/, 'nothing is tilted');
