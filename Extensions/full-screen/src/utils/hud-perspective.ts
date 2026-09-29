@@ -5,7 +5,7 @@ import CFM from "./config";
 // smaller, so rows of text bow toward the vertical centre as they cross the screen.
 //
 // Text is not resampled (that loses anti-aliasing): text blocks, their words, lyric lines,
-// buttons and images are each moved, scaled and turned to follow the curve at their own
+// buttons and images are each moved and turned (never resized) to follow the curve at their own
 // position. The blurred background is bent as an image with an SVG displacement filter.
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -90,36 +90,37 @@ function reset(piece: HTMLElement) {
     written.delete(piece);
 }
 
-// Where the curve puts a point of the flat layout: its vertical offset, the slope of the curve
-// there, and how much smaller it is drawn.
+// Where the curve puts a point of the flat layout: its vertical offset and the slope of the curve
+// there. Pieces are moved and turned but keep their size, so heights never change.
 function curveAt(x: number, y: number) {
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
-    const u = (x - cx) / cx;
+    const u = clamp((x - cx) / cx, -1, 1);
     const scale = 1 - bend * (1 - u * u);
     return {
         dy: (y - cy) * (scale - 1),
         slope: Math.atan(((y - cy) * bend * 2 * u) / cx) * (180 / Math.PI),
-        scale,
     };
+}
+
+// Pieces parked off screen (the up-next card while hidden) are left flat.
+function onScreen(centre: { x: number; y: number }) {
+    return centre.x >= 0 && centre.x <= window.innerWidth && centre.y >= 0 && centre.y <= window.innerHeight;
 }
 
 function flatCentre(piece: Element) {
     const box = piece.getBoundingClientRect();
     if (!box.width || !box.height) return null;
-    // Rotation and scale are about the centre, so only the vertical offset moved it.
+    // Rotation is about the centre, so only the vertical offset moved it.
     return { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 - (applied.get(piece) ?? 0) };
 }
 
-function write(piece: HTMLElement, dy: number, slope: number | null, scale: number | null) {
-    const key = `${dy.toFixed(1)}|${slope?.toFixed(2)}|${scale?.toFixed(3)}`;
+function write(piece: HTMLElement, dy: number, slope: number | null) {
+    const key = `${dy.toFixed(1)}|${slope?.toFixed(2)}`;
     if (written.get(piece) === key) return;
     written.set(piece, key);
     piece.style.translate = `0 ${dy.toFixed(1)}px`;
     if (slope !== null) piece.style.rotate = `${slope.toFixed(2)}deg`;
-    // The curve squeezes vertically only (horizontal positions stay put), so pieces do too;
-    // shrinking words sideways would open gaps between them.
-    if (scale !== null) piece.style.scale = `1 ${scale.toFixed(3)}`;
 }
 
 // Places every piece on the curve. Pieces keep moving (lyrics scroll, controls collapse), so this
@@ -146,24 +147,27 @@ function tick() {
         const { dy } = curveAt(centre.x, centre.y);
         blockDy.set(block, dy);
         applied.set(block, dy);
-        write(block, dy, null, null);
+        write(block, dy, null);
     });
     words.forEach((word, i) => {
         const centre = wordCentres[i];
         if (!centre) return;
-        const { dy, slope, scale } = curveAt(centre.x, centre.y);
+        const { dy, slope } = curveAt(centre.x, centre.y);
         const block = word.closest(BLOCKS);
         const inherited = block ? blockDy.get(block) ?? 0 : 0;
         applied.set(word, dy);
-        write(word, dy - inherited, slope, scale);
+        write(word, dy - inherited, slope);
     });
     rigid.forEach((piece, i) => {
         const centre = rigidCentres[i];
         if (!centre) return;
-        const { dy, slope, scale } = curveAt(centre.x, centre.y);
+        if (!onScreen(centre)) {
+            if (applied.has(piece)) reset(piece);
+            return;
+        }
+        const { dy, slope } = curveAt(centre.x, centre.y);
         applied.set(piece, dy);
-        // Lyric lines already scale themselves (the active line grows), so they only move and turn.
-        write(piece, dy, slope, piece.matches(LYRIC_LINES) ? null : scale);
+        write(piece, dy, slope);
     });
     frame = requestAnimationFrame(tick);
 }

@@ -370,6 +370,14 @@
         display: inline-block;
     }
 
+    // These icons animate every property; the curve moves them each frame, so its offsets must
+    // not be eased on top (they trailed behind the text beside them).
+    #fsd-title > svg,
+    #fsd-artist > svg,
+    #fsd-album > svg {
+        transition-property: fill, color, opacity, width, height, margin;
+    }
+
     #fsd-ctx-details,
     #fsd-title > span,
     #fsd-artist > span,

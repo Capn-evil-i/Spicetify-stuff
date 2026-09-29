@@ -26,8 +26,9 @@ test('the curve keeps the edges and squeezes the middle, moving pieces instead o
   assert.match(helper, /const scale = 1 - bend \* \(1 - u \* u\);/);
   assert.match(helper, /dy: \(y - cy\) \* \(scale - 1\),/);
   assert.match(helper, /piece\.style\.translate = /);
-  assert.match(helper, /write\(word, dy - inherited, slope, scale\)/);
+  assert.match(helper, /write\(word, dy - inherited, slope\)/);
   assert.match(helper, /piece\.style\.rotate = /);
+  assert.doesNotMatch(helper, /piece\.style\.scale = /, 'pieces keep their size');
   // Text is split into words that each follow the curve, and joined again when the curve is off.
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
