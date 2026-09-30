@@ -22,10 +22,10 @@ import CFM from "./config";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 50% (0.09)
-// matches the user's terminal wallpaper (Wallpaper Engine), measured from how steeply its corner
-// panels slant toward the middle.
-const MAX_BEND = 0.18;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 50% is what
+// 100% used to be (the user found that too weak); 25% matches the user's terminal wallpaper
+// (Wallpaper Engine), measured from how steeply its corner panels slant toward the middle.
+const MAX_BEND = 0.36;
 // How quickly the bend follows a change of strength (time constant, ms).
 const EASE_MS = 120;
 // Set while the curve is drawn, including while it eases out; the curve's CSS keys off it.
