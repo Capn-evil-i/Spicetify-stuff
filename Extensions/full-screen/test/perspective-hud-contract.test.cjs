@@ -45,10 +45,10 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
   assert.match(tvStyles, /\.hud-curving \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
-  assert.match(helper, /const BENT = \[\s*"#fsd-progress-bar",\s*"#fsd_next_art",\s*"#fsd-ctx-icon",/);
-  // The artwork frame only moves; its picture bends and zooms inside it.
-  assert.match(helper, /function placeArt\(/);
-  assert.match(tvStyles, /#fsd-art-image::after \{[\s\S]*?transform: matrix\(1, var\(--fsd-art-shear, 0\), 0, var\(--fsd-art-tall, 1\), 0, 0\) scale\(var\(--fsd-art-zoom, 1\)\);/);
+  assert.match(helper, /const BENT = \[\s*"#fsd-art",\s*"#fsd-progress-bar",\s*"#fsd_next_art",\s*"#fsd-ctx-icon",/);
+  // The artwork is warped whole, like before (the user wants it bent, not squared up).
+  assert.doesNotMatch(helper, /function placeArt\(/);
+  assert.doesNotMatch(tvStyles, /#fsd-art-image::after/);
   // The bend eases instead of snapping.
   assert.match(helper, /bend \+= \(targetBend - bend\) \* \(1 - Math\.exp\(-elapsed \/ EASE_MS\)\);/);
   assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');

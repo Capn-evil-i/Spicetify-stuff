@@ -14,8 +14,7 @@ import CFM from "./config";
 //
 // Nothing on the HUD is resampled (that aliases edges and text). Every word, icon and the progress
 // bar are sheared and scaled vertically to their slice of the arc: upright edges stay upright and
-// horizontal ones follow the curve. The artwork's frame only moves; the picture bends and zooms
-// inside it, so the frame never hangs off at an angle. Changing the strength or switching the
+// horizontal ones follow the curve, the artwork included. Changing the strength or switching the
 // effect eases the bend in and out instead of snapping. Text blocks are sheared as a whole first, so their
 // clipping boxes follow the curve with their words. Buttons and icons move with the curve. Lyric
 // lines stay where lyrics-plus puts them and their words bend around each line's middle, so the
@@ -54,9 +53,10 @@ const PIECES = [
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
-// Icons and shapes without a transform of their own: sheared like words, so they bend with the
-// curve too (the disc icon, the progress bar and its times).
+// Images, icons and shapes without a transform of their own: sheared like words, so they bend
+// with the curve too (the artwork, the disc icon, the progress bar and its times).
 const BENT = [
+    "#fsd-art",
     "#fsd-progress-bar",
     "#fsd_next_art",
     "#fsd-ctx-icon",
@@ -66,8 +66,6 @@ const BENT = [
     "#fsd-elapsed",
     "#fsd-duration",
 ].join(", ");
-// The artwork's frame moves with the curve; its picture (a layer drawn by CSS) bends inside it.
-const ART = "#fsd-art";
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
 const DEFS = "fsd-curve-defs";
@@ -134,8 +132,7 @@ function stop() {
     textObserver = null;
     updateBackground();
     if (!container) return;
-    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}, ${ART}`)) reset(element);
-    for (const name of ["--fsd-art-shear", "--fsd-art-tall", "--fsd-art-zoom"]) container.style.removeProperty(name);
+    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}`)) reset(element);
     joinWords();
     container.classList.remove(CURVING);
 }
@@ -315,13 +312,8 @@ function tick(now: number) {
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
     const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
-    const art = container.querySelector<HTMLElement>(ART);
-    const artFlat = art ? movedFlat(art) : null;
     const previousMargins = margins.left;
-    updateMargins(
-        [...pieces, ...bent, ...blocks, ...(art ? [art] : [])],
-        [...pieceFlats, ...bentFlats, ...blockFlats, ...(artFlat ? [artFlat] : [])],
-    );
+    updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
     // The background is rebuilt in 0.01 steps of bend, so easing does not rebuild it every frame.
     if (Math.round(previousMargins) !== Math.round(margins.left) || Math.abs(bend - backgroundBend) >= 0.01 || bend === targetBend) {
         updateBackground();
@@ -367,25 +359,7 @@ function tick(now: number) {
         }
         placeSheared(element, flat, null, 0);
     });
-    if (art && artFlat && onScreen(artFlat)) placeArt(art, artFlat);
     frame = requestAnimationFrame(tick);
-}
-
-// The artwork's frame moves so its centre sits on the curve but stays square-on; the picture
-// inside takes the curve's slope and height there and zooms just enough to still fill the frame.
-function placeArt(art: HTMLElement, flat: Flat & { origin: number }) {
-    placePiece(art, flat, false);
-    const cx = flat.left + flat.width / 2;
-    const cy = flat.top + flat.height / 2;
-    const shear = (cy - midline()) * heightSlopeAt(cx);
-    const tall = heightAt(cx);
-    const zoom = (flat.height + Math.abs(shear) * flat.width) / (tall * flat.height);
-    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${zoom.toFixed(3)}`;
-    if (written.get(container!) === key) return;
-    written.set(container!, key);
-    container!.style.setProperty("--fsd-art-shear", shear.toFixed(4));
-    container!.style.setProperty("--fsd-art-tall", tall.toFixed(3));
-    container!.style.setProperty("--fsd-art-zoom", zoom.toFixed(3));
 }
 
 function defs() {
