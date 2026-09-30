@@ -74,7 +74,13 @@ const DEFS = "fsd-curve-defs";
 // cluster's middle height, so its rows keep their spacing and letters keep their height (bending
 // each row by its own height squashed text and crowded rows at high strength). Lyric lines are
 // their own panels.
-const GROUPS = "#fsd-foreground, #fsd-ctx-container, #fsd-upnext-container, #fsd-volume-container, #fsd-overview-card";
+const GROUPS =
+    "#fsd-foreground, #fsd-ctx-container, #fsd-upnext-container, #fsd-volume-container, #fsd-overview-card, #fad-lyrics-plus-container";
+// Every panel bends by the same amount, as if it sat this far (a share of the screen height) from
+// the screen's middle row: panels in the bottom half arc up toward the middle, panels in the top
+// half arc down. Bending by each panel's real distance made the outer panels bend far harder
+// than the lyrics near the middle.
+const ARM = 0.3;
 let groupRefs = new Map<Element, number>();
 // Rows the curve leaves alone while the pointer is over them (app.tsx sets controls-held).
 const HELD = "#fsd-status, #fsd-progress-parent";
@@ -177,8 +183,14 @@ function heightSlopeAt(x: number) {
 const midline = () => window.innerHeight / 2;
 // The height a piece is bent at: its panel's middle, or its own middle outside any panel.
 function refFor(element: Element, ownY: number) {
-    const group = element.closest(`${GROUPS}, ${LYRIC_LINES}`);
+    const group = element.closest(GROUPS);
     return (group && groupRefs.get(group)) ?? ownY;
+}
+
+// The bend's lever for a panel whose middle is at `ref`: the same length for every panel, pointing
+// toward the middle row from whichever half of the screen the panel is in.
+function armFor(ref: number) {
+    return (ref >= midline() ? 1 : -1) * ARM * window.innerHeight;
 }
 
 function onScreen(box: Flat) {
@@ -222,14 +234,14 @@ function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
 
 // How far the curve moves a point vertically.
 // How far the curve moves a panel whose middle is at height `ref`, at x.
-const liftAt = (x: number, ref: number) => (ref - midline()) * (heightAt(x) - 1);
+const liftAt = (x: number, ref: number) => armFor(ref) * (heightAt(x) - 1);
 
 // Shears a text block so its centre lands on the curve and its slope follows the curve there.
 function placeBlock(block: HTMLElement, flat: Flat): Shear {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
     const ref = refFor(block, cy);
-    const shear = (ref - midline()) * heightSlopeAt(cx);
+    const shear = armFor(ref) * heightSlopeAt(cx);
     const lift = liftAt(cx, ref) - shear * (flat.width / 2);
     sheared.set(block, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
@@ -261,7 +273,7 @@ function placeCentred(button: HTMLElement, flat: Flat) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
     const ref = refFor(button, cy);
-    const shear = (ref - midline()) * heightSlopeAt(cx);
+    const shear = armFor(ref) * heightSlopeAt(cx);
     const lift = liftAt(cx, ref);
     sheared.set(button, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
@@ -289,7 +301,7 @@ function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, paren
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
     const ref = refFor(word, cy);
-    const totalShear = (ref - midline()) * heightSlopeAt(cx);
+    const totalShear = armFor(ref) * heightSlopeAt(cx);
     const targetTop = cy + liftAt(cx, ref) - pin - totalShear * (flat.width / 2) - flat.height / 2;
     const shear = totalShear - (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
@@ -389,10 +401,21 @@ function tick(now: number) {
         }
         groupRefs.set(group, (top + bottom) / 2);
     }
-    blocks.forEach((block, i) => {
-        const flat = blockFlats[i];
-        if (flat && block.matches(LYRIC_LINES)) groupRefs.set(block, flat.top + flat.height / 2);
-    });
+    // The lyrics panel's box spans the whole height, so its middle is taken from the lines shown.
+    const lyrics = container.querySelector("#fad-lyrics-plus-container");
+    if (lyrics && lyricsArea) {
+        let top = Infinity;
+        let bottom = -Infinity;
+        blocks.forEach((block, i) => {
+            const flat = blockFlats[i];
+            if (!flat || !block.matches(LYRIC_LINES)) return;
+            const mid = flat.top + flat.height / 2;
+            if (mid < lyricsArea!.top || mid > lyricsArea!.top + lyricsArea!.height) return;
+            top = Math.min(top, flat.top);
+            bottom = Math.max(bottom, flat.top + flat.height);
+        });
+        if (Number.isFinite(top)) groupRefs.set(lyrics, (top + bottom) / 2);
+    }
     const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
     const previousMargins = margins.left;
     updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
@@ -550,9 +573,13 @@ function verticalShiftFilter(
     canvas.height = mapHeight;
     const context = canvas.getContext("2d")!;
     const image = context.createImageData(mapWidth, mapHeight);
+    // An 8-bit map moves pixels in steps of range / 255 (several px at high strength), which shows
+    // as bands. The map is dithered and the result lightly blurred (below) to hide the steps.
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     shifts.forEach((value, p) => {
+        const dither = BAYER[((Math.floor(p / mapWidth) % 4) * 4 + ((p % mapWidth) % 4))] / 16 - 0.47;
         image.data[p * 4] = 128;
-        image.data[p * 4 + 1] = Math.round(128 + (value / range) * 255);
+        image.data[p * 4 + 1] = clamp(Math.round(128 + (value / range) * 255 + dither), 0, 255);
         image.data[p * 4 + 2] = 128;
         image.data[p * 4 + 3] = 255;
     });
@@ -565,7 +592,8 @@ function verticalShiftFilter(
     filter.setAttribute("color-interpolation-filters", "sRGB");
     filter.innerHTML =
         `<feImage href="${canvas.toDataURL()}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none" result="map"/>` +
-        `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G" result="bent"/>` +
+        `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G"/>` +
+        `<feGaussianBlur stdDeviation="${Math.max(1, (1.5 * range) / 255).toFixed(1)}" edgeMode="duplicate" result="bent"/>` +
         // 8 bits cannot say "no shift" exactly (128/255 is a fifth of a pixel past centre), so where
         // the bend is zero the last row and column sample just past the image and come out
         // transparent (a thin grey line along the bottom middle). The bent image is laid over

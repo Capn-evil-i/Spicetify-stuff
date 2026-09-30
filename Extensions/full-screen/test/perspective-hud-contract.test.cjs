@@ -26,9 +26,11 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   // and steepest toward the edges instead of flattening off near them.
   assert.match(helper, /return \{ depth: 1 - u \* u, slope: \(-2 \* u\) \/ half \};/);
   assert.doesNotMatch(helper, /Math\.cos\(Math\.PI \* u\)/);
-  assert.match(helper, /const liftAt = \(x: number, ref: number\) => \(ref - midline\(\)\) \* \(heightAt\(x\) - 1\);/);
+  assert.match(helper, /const liftAt = \(x: number, ref: number\) => armFor\(ref\) \* \(heightAt\(x\) - 1\);/);
+  // Every panel bends by the same amount, whatever its distance from the middle row.
+  assert.match(helper, /const ARM = 0\.3;/);
   // Clusters bend as one panel, so text keeps its height and rows keep their spacing.
-  assert.match(helper, /const GROUPS = "#fsd-foreground, #fsd-ctx-container/);
+  assert.match(helper, /const GROUPS =\s*"#fsd-foreground, #fsd-ctx-container/);
   // Pinned at the HUD's own margins, so the gap to the screen edge is the same on and off.
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
   // Words, the artwork and the progress bar are sheared (upright edges stay upright) and scaled
@@ -125,4 +127,9 @@ test('the progress bar follows the curve point by point, not as a straight tilte
   assert.match(helper, /const pointAt = \(x: number\) => \[x - origin\.left, cy \+ liftAt\(x, ref\) - origin\.top\];/);
   assert.match(tvStyles, /#fsd-progress-bar \{\s*position: relative;\s*background: transparent !important;\s*> \* \{\s*opacity: 0;/);
   assert.match(tvStyles, /#fsd-progress-curve \{\s*position: fixed;/);
+});
+
+test('the background warp hides its 8-bit steps', () => {
+  assert.match(helper, /const BAYER = \[/);
+  assert.match(helper, /<feGaussianBlur stdDeviation="\$\{Math\.max\(1, \(1\.5 \* range\) \/ 255\)\.toFixed\(1\)\}" edgeMode="duplicate" result="bent"\/>/);
 });
