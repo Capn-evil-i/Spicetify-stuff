@@ -22,9 +22,9 @@ import CFM from "./config";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. The user has
-// asked twice for 100% to be twice as strong; 50% is where the previous 100% was.
-const MAX_BEND = 0.72;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline (the user's
+// chosen maximum, after trying 0.18 and 0.72).
+const MAX_BEND = 0.36;
 // How quickly the bend follows a change of strength (time constant, ms).
 const EASE_MS = 120;
 // Set while the curve is drawn, including while it eases out; the curve's CSS keys off it.
