@@ -372,6 +372,21 @@
         transform-origin: 0 0;
     }
 
+    // The curve writes these buttons' transform each frame (sheared about their centre), so their
+    // own hover zoom moves to `scale` and their transform is no longer eased.
+    .fs-button,
+    .lyrics-config-button {
+        transform-origin: 50% 50%;
+        transition:
+            scale 0.15s ease-out,
+            background 0.2s ease,
+            filter 0.2s ease;
+
+        &:hover {
+            scale: 1.08;
+        }
+    }
+
     // Link underlines cannot reach into the word boxes and would only mark the spaces between
     // them (DAYS_BEFORE_RODEO); each word draws its own underline instead.
     .fsd-song-meta span:hover,

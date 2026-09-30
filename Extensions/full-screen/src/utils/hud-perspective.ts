@@ -47,12 +47,13 @@ const WORD = "fsd-curve-word";
 // Small pieces that move with the curve as a whole. The perspective slider itself is left flat:
 // bending it would move the track under the pointer while it is being dragged.
 const PIECES = [
-    ".fsd-controls button",
-    ".extra-controls button",
     "#fsd_next_tit_art",
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
+// Buttons are sheared about their centre, so their hover and active backgrounds bend with them.
+// Their own hover zoom moves to the `scale` property while the curve is on (tvMode.scss).
+const BUTTONS = [".fsd-controls button", ".extra-controls button", "#fad-lyrics-plus-container .lyrics-config-button"].join(", ");
 // Images, icons and shapes without a transform of their own: sheared like words, so they bend
 // with the curve too (the artwork, the disc icon, the progress bar and its times).
 const BENT = [
@@ -132,7 +133,7 @@ function stop() {
     textObserver = null;
     updateBackground();
     if (!container) return;
-    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}`)) reset(element);
+    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}, ${BUTTONS}`)) reset(element);
     joinWords();
     container.classList.remove(CURVING);
 }
@@ -228,6 +229,33 @@ function placeBlock(block: HTMLElement, flat: Flat): Shear {
 // curve, on top of what its block already does to it. `pin` is subtracted from the curve's lift:
 // lyric words use their line's own lift there, so each line bends around its middle and stays at
 // its usual height.
+// A button sheared about its centre: the shear and vertical scale leave the centre where it is,
+// so the centre only moves by the curve's lift there. `lift` is that move, in screen px.
+function centredFlat(button: HTMLElement): Flat | null {
+    const box = button.getBoundingClientRect();
+    const [layoutWidth, layoutHeight] = layoutSize(button);
+    if (!box.width || !box.height || !layoutWidth) return null;
+    const lift = sheared.get(button)?.lift ?? 0;
+    const scale = box.width / layoutWidth;
+    const height = layoutHeight * scale;
+    const cy = (box.top + box.bottom) / 2 - lift;
+    return { left: box.left, top: cy - height / 2, width: box.width, height, scale };
+}
+
+function placeCentred(button: HTMLElement, flat: Flat) {
+    const cx = flat.left + flat.width / 2;
+    const cy = flat.top + flat.height / 2;
+    const shear = (cy - midline()) * heightSlopeAt(cx);
+    const tall = heightAt(cx);
+    const lift = liftAt(cx, cy);
+    sheared.set(button, { shear, lift });
+    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${lift.toFixed(1)}`;
+    if (written.get(button) !== key) {
+        written.set(button, key);
+        button.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, ${tall.toFixed(3)}, 0, ${(lift / flat.scale).toFixed(2)})`;
+    }
+}
+
 function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
@@ -359,6 +387,15 @@ function tick(now: number) {
         }
         placeSheared(element, flat, null, 0);
     });
+    for (const button of container.querySelectorAll<HTMLElement>(BUTTONS)) {
+        const flat = centredFlat(button);
+        if (!flat || (held && button.closest(HELD))) continue;
+        if (!onScreen(flat)) {
+            if (sheared.has(button)) reset(button);
+            continue;
+        }
+        placeCentred(button, flat);
+    }
     frame = requestAnimationFrame(tick);
 }
 

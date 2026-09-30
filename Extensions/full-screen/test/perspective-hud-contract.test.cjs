@@ -104,3 +104,12 @@ test('lyrics fade out at the top and bottom instead of being cut off', () => {
   assert.match(baseStyles, /\.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: linear-gradient\(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%\);/);
   assert.doesNotMatch(tvStyles, /\.lyrics-lyricsContainer-SyncedLyrics,|\.lyrics-lyricsContainer-SyncedLyrics \{[^}]*mask/);
 });
+
+test('control buttons bend with the curve, hover backgrounds included', () => {
+  assert.match(helper, /const BUTTONS = \[".fsd-controls button", ".extra-controls button", "#fad-lyrics-plus-container \.lyrics-config-button"\]/);
+  assert.match(helper, /button\.style\.transform = `matrix\(1, \$\{shear\.toFixed\(4\)\}, 0, \$\{tall\.toFixed\(3\)\}, 0, /);
+  assert.doesNotMatch(helper, /const PIECES = \[\s*"\.fsd-controls button"/);
+  // Their hover zoom moves to `scale`, and their transform is not eased behind the curve.
+  assert.match(tvStyles, /\.fs-button,\s*\.lyrics-config-button \{\s*transform-origin: 50% 50%;\s*transition:\s*scale 0\.15s ease-out,/);
+  assert.match(tvStyles, /&:hover \{\s*scale: 1\.08;/);
+});
