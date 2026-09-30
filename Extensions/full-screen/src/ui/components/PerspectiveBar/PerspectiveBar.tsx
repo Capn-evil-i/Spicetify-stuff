@@ -93,21 +93,13 @@ const PerspectiveBar = () => {
     }, [dragging]);
 
     const active = on && value > 0;
+    // Laid out like the smart volume bar turned on its side: value, bar, then an icon that switches
+    // the effect on and off the way the volume icon mutes.
     return (
         <div
             id="fsd-perspective-container"
             className={classNames({ "p-hidden": !visible, dragging, "perspective-off": !active })}>
-            <div id="fsd-perspective-header">
-                <div id="fsd-perspective-label">{active ? `Perspective ${value}%` : "Perspective off"}</div>
-                <button
-                    id="fsd-perspective-toggle"
-                    role="switch"
-                    aria-checked={active}
-                    aria-label="Perspective"
-                    onClick={onToggle}>
-                    <span id="fsd-perspective-toggle-knob" />
-                </button>
-            </div>
+            <div id="fsd-perspective-label">{active ? `${value}%` : "Off"}</div>
             <div
                 id="fsd-perspective-bar"
                 ref={track}
@@ -124,6 +116,20 @@ const PerspectiveBar = () => {
                     <div id="perspective-thumb" />
                 </div>
             </div>
+            <button
+                className="fs-button"
+                id="fsd-perspective-icon"
+                role="switch"
+                aria-checked={active}
+                aria-label="Perspective"
+                title={active ? "Turn perspective off" : "Turn perspective on"}
+                onClick={onToggle}>
+                <svg height="20" width="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                    <path d="M1.5 3.2c4.3-1.2 8.7-1.2 13 0v8.1c-4.3-1.2-8.7-1.2-13 0z" strokeLinejoin="round" />
+                    <path d="M6 14.2h4" strokeLinecap="round" />
+                    {!active && <path d="M2 1.5l12 13" strokeLinecap="round" />}
+                </svg>
+            </button>
         </div>
     );
 };

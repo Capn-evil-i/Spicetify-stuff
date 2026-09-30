@@ -387,6 +387,20 @@
         }
     }
 
+    // While the curve is on, synced lyrics fade word by word by where each word sits before the curve
+    // moves it (hud-perspective.ts lyricFade), so the fade follows the curve. The flat mask and the
+    // page's straight clipping edge would cut the curved lines, so both step aside.
+    #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyricsPage {
+        -webkit-mask-image: none;
+        mask-image: none;
+        overflow: visible;
+    }
+
+    // Bloom's `overflow-x: hidden` on the lyrics box makes it clip vertically too.
+    #fad-lyrics-plus-container .lyrics-lyricsContainer-LyricsContainer:has(.lyrics-lyricsContainer-SyncedLyricsPage) {
+        overflow: visible !important;
+    }
+
     // The progress bar is drawn as a curve (hud-perspective.ts drawProgressCurve). The bar itself
     // stays underneath, invisible, for seeking, with a taller hit area so the curve above or below
     // it still takes clicks.

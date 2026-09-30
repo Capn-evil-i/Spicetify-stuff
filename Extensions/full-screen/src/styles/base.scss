@@ -604,8 +604,7 @@
         #fsd-volume-bar-inner,
         #volume-thumb,
         #fsd-perspective-bar-inner,
-        #perspective-thumb,
-        #fsd-perspective-toggle {
+        #perspective-thumb {
             box-shadow:
                 0 0 2px var(--fsd-own-glow),
                 0 0 8px var(--fsd-own-glow) !important;
@@ -637,6 +636,7 @@
     .fsd-controls button,
     #fsd-status button,
     #fsd-volume-icon,
+    #fsd-perspective-icon,
     #fsd-overview-pin-button,
     #fsd-overview-button-container button {
         filter: var(--fsd-control-glow);

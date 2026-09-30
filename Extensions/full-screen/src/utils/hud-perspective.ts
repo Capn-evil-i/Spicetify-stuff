@@ -48,7 +48,8 @@ const WORD = "fsd-curve-word";
 const PIECES = [
     "#fsd_next_tit_art",
     "#fsd-volume-container > *",
-    "#fsd-overview-card > *",
+    // The clock card moves as a whole: moving its contents left them behind their card.
+    "#fsd-overview-card",
 ].join(", ");
 // Buttons are sheared about their centre, so their hover and active backgrounds bend with them.
 // Their own hover zoom moves to the `scale` property while the curve is on (tvMode.scss).
@@ -145,7 +146,9 @@ function stop() {
 }
 
 function reset(element: HTMLElement) {
-    for (const property of ["transform", "translate", "scale"]) element.style.removeProperty(property);
+    for (const property of ["transform", "translate", "scale", "opacity"]) {
+        if (property !== "opacity" || element.tagName === WORD.toUpperCase()) element.style.removeProperty(property);
+    }
     sheared.delete(element);
     moved.delete(element);
     written.delete(element);
@@ -268,6 +271,20 @@ function placeCentred(button: HTMLElement, flat: Flat) {
     }
 }
 
+// Lyric words fade out toward the top and bottom of the lyrics area by where they sit before the
+// curve moves them, so the fade follows the curve (a flat mask cut curved lines straight across).
+let lyricsArea: { top: number; height: number } | null = null;
+const smooth = (t: number) => {
+    const c = clamp(t, 0, 1);
+    return c * c * (3 - 2 * c);
+};
+
+function lyricFade(flat: Flat) {
+    if (!lyricsArea || !lyricsArea.height) return 1;
+    const t = (flat.top + flat.height / 2 - lyricsArea.top) / lyricsArea.height;
+    return Math.min(smooth(t / 0.14), smooth((1 - t) / 0.2));
+}
+
 function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
@@ -348,6 +365,9 @@ function tick(now: number) {
         return shearedFlat(word, (block && sheared.get(block)) || null, flat?.left ?? 0);
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
+    const lyricsPage = container.querySelector("#fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyricsPage");
+    const lyricsBox = lyricsPage?.getBoundingClientRect();
+    lyricsArea = lyricsBox && lyricsBox.height ? { top: lyricsBox.top, height: lyricsBox.height } : null;
     // A panel's middle is the middle of what it shows, not of its box: in TV mode #fsd-foreground
     // spans the whole screen height, so its box's middle sat on the midline and left the title,
     // controls and artwork flat.
@@ -401,6 +421,10 @@ function tick(now: number) {
         const blockFlat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
         const pin = (block && linePin.get(block)) || 0;
         placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin);
+        if (block && linePin.has(block)) {
+            const fade = lyricFade(flat).toFixed(2);
+            if (word.style.opacity !== (fade === "1.00" ? "" : fade)) word.style.opacity = fade === "1.00" ? "" : fade;
+        }
     });
     const held = container.classList.contains("controls-held");
     pieces.forEach((piece, i) => {

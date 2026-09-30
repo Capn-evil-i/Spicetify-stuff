@@ -1,15 +1,15 @@
-// Mirrors the volume bar's look, laid out horizontally under the artwork.
+// The smart volume bar (VolumeBar/styles.scss) turned on its side, at the bottom-left under the
+// artwork: value, bar and an on/off icon, the same sizes and colours, shown and hidden the same way.
 #fsd-perspective-container {
     position: fixed;
     left: var(--fsd-art-margin, 30px);
     bottom: 22px;
-    width: 220px;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
     color: var(--primary-color);
     z-index: 50;
-    // Shows and hides the way the smart volume bar does, coming in from the bottom edge.
     transition: transform 0.6s var(--transition-function);
 
     &.p-hidden {
@@ -21,64 +21,22 @@
         transform: translateY(0) scale(1);
     }
 
-    #fsd-perspective-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
     #fsd-perspective-label {
-        font-size: 14px;
-        color: var(--secondary-color);
-    }
-
-    // On/off switch: keeps the strength when it is turned off.
-    #fsd-perspective-toggle {
-        position: relative;
-        flex: 0 0 auto;
-        width: 30px;
-        height: 16px;
-        padding: 0;
-        border: 0;
-        border-radius: 8px;
-        background-color: var(--theme-main-color, var(--primary-color));
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-
-        #fsd-perspective-toggle-knob {
-            position: absolute;
-            top: 2px;
-            left: 16px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            transition: left 0.2s ease;
-        }
-    }
-
-    &.perspective-off {
-        #fsd-perspective-toggle {
-            background-color: rgba(var(--main-color), 0.35);
-
-            #fsd-perspective-toggle-knob {
-                left: 2px;
-            }
-        }
-
-        #fsd-perspective-bar-inner {
-            opacity: 0.4;
-        }
+        width: 50px;
+        font-size: 18px;
+        text-align: center;
     }
 
     #fsd-perspective-bar {
         position: relative;
+        width: 220px;
         height: 8px;
         border-radius: 4px;
         background-color: rgba(var(--main-color), 0.35);
         cursor: pointer;
         touch-action: none;
+        display: flex;
+        align-items: center;
 
         &:hover,
         &.dragging {
@@ -86,6 +44,7 @@
             #perspective-thumb {
                 background: var(--theme-main-color);
                 filter: saturate(1.5) contrast(1.5);
+                transition: none;
             }
 
             #perspective-thumb {
@@ -95,7 +54,6 @@
     }
 
     &.dragging #perspective-thumb {
-        display: block;
         transform: translateY(-50%) scale(1.1);
     }
 
@@ -105,6 +63,7 @@
         border-radius: 4px;
         background-color: var(--primary-color);
         pointer-events: none;
+        transition: width 0.1s var(--transition-function);
     }
 
     #perspective-thumb {
@@ -118,5 +77,15 @@
         transform: translateY(-50%);
         display: none;
         pointer-events: none;
+    }
+
+    #fsd-perspective-icon svg {
+        stroke: var(--primary-color);
+    }
+
+    &.perspective-off {
+        #fsd-perspective-bar-inner {
+            background-color: var(--tertiary-color);
+        }
     }
 }

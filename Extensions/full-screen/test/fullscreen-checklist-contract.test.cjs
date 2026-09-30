@@ -29,7 +29,7 @@ test('glows use the element\'s own colours', () => {
   assert.match(baseStyles, /--fsd-control-glow: drop-shadow\(0 0 2px var\(--fsd-own-glow\)\) drop-shadow\(0 0 8px var\(--fsd-own-glow\)\);/);
   assert.match(baseStyles, /&\.glow-art \{\s*#fsd-art \{[\s\S]*?&::before \{[\s\S]*?background-image: var\(--fsd-art-url\);[\s\S]*?filter: blur\(22px\)/);
   assert.match(app, /setProperty\("--fsd-art-url"/);
-  assert.match(baseStyles, /#fsd-perspective-bar-inner,\s*#perspective-thumb,\s*#fsd-perspective-toggle \{/);
+  assert.match(baseStyles, /#fsd-perspective-bar-inner,\s*#perspective-thumb \{/);
 });
 
 test('lyrics fade at their edges and their buttons sit in the corner, in every mode', () => {
@@ -74,4 +74,24 @@ test('controls hide as soon as the pointer leaves them, and 1.5s after the mouse
   assert.match(extra, /static hideExtraControls\(\) \{\s*this\.scheduleHide\(1500\);/);
   assert.match(progress, /const hideProgressBar = \(timeout = 1500\) =>/);
   assert.match(progress, /document\.addEventListener\("fsd-controls-leave", onControlsLeave\)/);
+});
+
+test('the perspective control mirrors the smart volume bar, with an icon to switch it', () => {
+  const bar = read('ui', 'components', 'PerspectiveBar', 'PerspectiveBar.tsx');
+  const barStyles = read('ui', 'components', 'PerspectiveBar', 'styles.scss');
+  assert.match(bar, /id="fsd-perspective-icon"[\s\S]*?onClick=\{onToggle\}/);
+  assert.match(barStyles, /#fsd-perspective-label \{\s*width: 50px;\s*font-size: 18px;/);
+  assert.match(barStyles, /#fsd-perspective-bar \{[\s\S]*?height: 8px;/);
+});
+
+test('the clock card moves as one piece, and lyrics fade along the curve', () => {
+  const helper = read('utils', 'hud-perspective.ts');
+  assert.match(helper, /"#fsd-overview-card",\s*\]\.join/);
+  assert.doesNotMatch(helper, /"#fsd-overview-card > \*"/);
+  assert.match(helper, /function lyricFade\(flat: Flat\)/);
+  assert.match(tvStyles, /\.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: none;\s*mask-image: none;\s*overflow: visible;/);
+});
+
+test('nothing clips the curved lyrics with a straight edge', () => {
+  assert.match(tvStyles, /\.lyrics-lyricsContainer-LyricsContainer:has\(\.lyrics-lyricsContainer-SyncedLyricsPage\) \{\s*overflow: visible !important;/);
 });
