@@ -400,15 +400,47 @@ async function main() {
         }, 2000);
     }
 
-    // While the pointer is over the controls or the progress bar, their rows keep their width and
-    // the curve leaves them where they are, so a song change (a longer or shorter title) does not
-    // slide a button out from under the pointer. They settle into place once the pointer leaves.
+    // While the pointer is over the controls or the progress bar, their rows keep their width, the
+    // curve leaves them alone, and they stay where they are on screen even if the layout around them
+    // moves (a song change with a longer or shorter title moves the rows up or down). Otherwise a
+    // skip slides the button out from under a still pointer, which counts as leaving and hides the
+    // controls. They settle into their new place once the pointer leaves.
+    let heldRows: { row: HTMLElement; left: number; top: number }[] = [];
+    let holdFrame = 0;
+
+    function rowOffset(row: HTMLElement) {
+        const [x = "0", y = "0"] = (row.style.translate || "0px 0px").split(" ");
+        return [parseFloat(x) || 0, parseFloat(y) || 0];
+    }
+
+    function keepRowsInPlace() {
+        for (const held of heldRows) {
+            const [dx, dy] = rowOffset(held.row);
+            const box = held.row.getBoundingClientRect();
+            const x = held.left - (box.left - dx);
+            const y = held.top - (box.top - dy);
+            if (Math.abs(x - dx) > 0.5 || Math.abs(y - dy) > 0.5) held.row.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
+        }
+        holdFrame = requestAnimationFrame(keepRowsInPlace);
+    }
+
     function holdControls(hold: boolean) {
         DOM.container.classList.toggle("controls-held", hold);
-        for (const row of DOM.container.querySelectorAll<HTMLElement>("#fsd-status, #fsd-progress-parent")) {
+        cancelAnimationFrame(holdFrame);
+        holdFrame = 0;
+        for (const held of heldRows) held.row.style.removeProperty("translate");
+        heldRows = [];
+        const rows = Array.from(DOM.container.querySelectorAll<HTMLElement>("#fsd-status, #fsd-progress-parent"));
+        for (const row of rows) {
             if (hold) row.style.width = `${row.offsetWidth}px`;
             else row.style.removeProperty("width");
         }
+        if (!hold) return;
+        heldRows = rows.map((row) => {
+            const box = row.getBoundingClientRect();
+            return { row, left: box.left, top: box.top };
+        });
+        holdFrame = requestAnimationFrame(keepRowsInPlace);
     }
 
     function onStatusEnter() {

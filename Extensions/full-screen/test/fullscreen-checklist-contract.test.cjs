@@ -103,3 +103,8 @@ test('fade animations do not knock elements off the curve', () => {
   assert.doesNotMatch(block, /transform:/);
   assert.match(block, /translate: 0 10px;/);
 });
+
+test('held control rows stay put on screen through a song change', () => {
+  assert.match(app, /function keepRowsInPlace\(\)/);
+  assert.match(app, /held\.row\.style\.translate = `\$\{x\.toFixed\(1\)\}px \$\{y\.toFixed\(1\)\}px`/);
+});
