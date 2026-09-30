@@ -387,6 +387,81 @@
         }
     }
 
+    // The progress bar is drawn as a curve (hud-perspective.ts drawProgressCurve). The bar itself
+    // stays underneath, invisible, for seeking, with a taller hit area so the curve above or below
+    // it still takes clicks.
+    #fsd-progress-bar {
+        position: relative;
+        background: transparent !important;
+
+        > * {
+            opacity: 0;
+        }
+
+        &::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: -16px;
+            bottom: -16px;
+        }
+    }
+
+    #fsd-progress-curve {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: visible;
+        pointer-events: none;
+        fill: none;
+        stroke-linecap: round;
+
+        path {
+            stroke-width: var(--fsd-curve-thickness, 6px);
+        }
+
+        .fsd-curve-track {
+            stroke: rgba(var(--main-color), 0.35);
+        }
+
+        .fsd-curve-fill {
+            stroke: var(--primary-color);
+        }
+
+        .fsd-curve-thumb {
+            r: 0;
+            fill: var(--primary-color);
+            transition: r 0.1s ease;
+        }
+
+        &.active {
+            .fsd-curve-fill,
+            .fsd-curve-thumb {
+                stroke: var(--theme-main-color);
+                filter: saturate(1.5) contrast(1.5);
+            }
+
+            .fsd-curve-thumb {
+                r: 6px;
+                fill: var(--theme-main-color);
+            }
+        }
+
+        &.dragging .fsd-curve-thumb {
+            r: 8.4px;
+        }
+    }
+
+    &.glow-progress #fsd-progress-curve {
+        .fsd-curve-fill,
+        .fsd-curve-thumb {
+            filter: drop-shadow(0 0 2px var(--fsd-own-glow)) drop-shadow(0 0 8px var(--fsd-own-glow));
+        }
+    }
+
     // Link underlines cannot reach into the word boxes and would only mark the spaces between
     // them (DAYS_BEFORE_RODEO); each word draws its own underline instead.
     .fsd-song-meta span:hover,

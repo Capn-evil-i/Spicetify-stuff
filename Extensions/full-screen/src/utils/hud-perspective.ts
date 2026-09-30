@@ -139,6 +139,7 @@ function stop() {
     updateBackground();
     if (!container) return;
     for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}, ${BUTTONS}`)) reset(element);
+    container.querySelector("#fsd-progress-curve")?.remove();
     joinWords();
     container.classList.remove(CURVING);
 }
@@ -420,6 +421,9 @@ function tick(now: number) {
         }
         placeSheared(element, flat, null, 0);
     });
+    const bar = container.querySelector<HTMLElement>("#fsd-progress-bar");
+    const barFlat = bar ? bentFlats[bent.indexOf(bar)] : null;
+    if (bar && barFlat && onScreen(barFlat)) drawProgressCurve(bar, barFlat);
     for (const button of container.querySelectorAll<HTMLElement>(BUTTONS)) {
         const flat = centredFlat(button);
         if (!flat || (held && button.closest(HELD))) continue;
@@ -430,6 +434,55 @@ function tick(now: number) {
         placeCentred(button, flat);
     }
     frame = requestAnimationFrame(tick);
+}
+
+// The progress bar is one long element, so a shear could only tilt it as a straight line. While
+// the curve is on, the bar itself is invisible (it stays under the curve for seeking, see
+// tvMode.scss) and its track, fill and thumb are drawn as an SVG that follows the curve point by
+// point, like the rows of text beside it.
+function drawProgressCurve(bar: HTMLElement, flat: Flat) {
+    const holder = bar.parentElement;
+    if (!holder) return;
+    let svg = holder.querySelector<SVGSVGElement>("#fsd-progress-curve");
+    if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.id = "fsd-progress-curve";
+        svg.innerHTML =
+            '<path class="fsd-curve-track"/><path class="fsd-curve-fill"/><circle class="fsd-curve-thumb"/>';
+        holder.appendChild(svg);
+    }
+    const origin = svg.getBoundingClientRect();
+    const thickness = flat.height;
+    const cy = flat.top + flat.height / 2;
+    const ref = refFor(bar, cy);
+    const start = flat.left + thickness / 2;
+    const end = flat.left + flat.width - thickness / 2;
+    const pointAt = (x: number) => [x - origin.left, cy + liftAt(x, ref) - origin.top];
+    const pathTo = (stop: number) => {
+        const steps = Math.max(2, Math.ceil((stop - start) / 12));
+        let d = "";
+        for (let i = 0; i <= steps; i++) {
+            const [x, y] = pointAt(start + ((stop - start) * i) / steps);
+            d += `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+        }
+        return d;
+    };
+    const inner = bar.querySelector<HTMLElement>("#fsd-progress-bar-inner");
+    const fraction = inner && bar.offsetWidth ? inner.offsetWidth / bar.offsetWidth : 0;
+    const fillEnd = start + (end - start) * clamp(fraction, 0, 1);
+    const active = bar.matches(":hover") || bar.classList.contains("dragging");
+    const key = `${pathTo(end)}|${fillEnd.toFixed(1)}|${active}|${bar.classList.contains("dragging")}|${thickness}`;
+    if (written.get(svg) === key) return;
+    written.set(svg, key);
+    svg.classList.toggle("active", active);
+    svg.classList.toggle("dragging", bar.classList.contains("dragging"));
+    svg.style.setProperty("--fsd-curve-thickness", `${thickness}px`);
+    svg.querySelector(".fsd-curve-track")!.setAttribute("d", pathTo(end));
+    svg.querySelector(".fsd-curve-fill")!.setAttribute("d", fraction > 0 ? pathTo(fillEnd) : "");
+    const [tx, ty] = pointAt(fillEnd);
+    const thumb = svg.querySelector(".fsd-curve-thumb")!;
+    thumb.setAttribute("cx", tx.toFixed(1));
+    thumb.setAttribute("cy", ty.toFixed(1));
 }
 
 function defs() {

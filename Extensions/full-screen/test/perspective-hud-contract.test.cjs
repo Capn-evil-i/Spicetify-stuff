@@ -119,3 +119,10 @@ test('control buttons bend with the curve, hover backgrounds included', () => {
 test('a panel bends at the middle of what it shows, not of its full-height box', () => {
   assert.match(helper, /for \(const child of Array\.from\(group\.children\)\) \{/);
 });
+
+test('the progress bar follows the curve point by point, not as a straight tilted line', () => {
+  assert.match(helper, /function drawProgressCurve\(bar: HTMLElement, flat: Flat\)/);
+  assert.match(helper, /const pointAt = \(x: number\) => \[x - origin\.left, cy \+ liftAt\(x, ref\) - origin\.top\];/);
+  assert.match(tvStyles, /#fsd-progress-bar \{\s*position: relative;\s*background: transparent !important;\s*> \* \{\s*opacity: 0;/);
+  assert.match(tvStyles, /#fsd-progress-curve \{\s*position: fixed;/);
+});
