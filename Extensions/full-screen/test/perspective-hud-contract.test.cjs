@@ -15,7 +15,7 @@ const tvStyles = readFileSync(join(root, 'src', 'styles', 'tvMode.scss'), 'utf8'
 test('perspective strength sets the bend and compact layouts keep a gentler one', () => {
   assert.match(helper, /clamp\(Number\(value\) \|\| 0, 0, 100\)/);
   assert.match(helper, /window\.innerWidth <= 800 \? 0\.55 : 1/);
-  assert.match(helper, /const MAX_BEND = 0\.36;/);
+  assert.match(helper, /const MAX_BEND = 0\.72;/);
   assert.match(app, /setHudPerspectiveStrength\(DOM\.container, Number\(CFM\.get\("hudPerspectiveStrength"\)\)\)/);
   assert.match(config, /input\.oninput = \(\) =>[\s\S]*?setHudPerspectiveStrength\(DOM\.container, strength\)/);
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
@@ -114,4 +114,8 @@ test('control buttons bend with the curve, hover backgrounds included', () => {
   // Their hover zoom moves to `scale`, and their transform is not eased behind the curve.
   assert.match(tvStyles, /\.fs-button,\s*\.lyrics-config-button \{\s*transform-origin: 50% 50%;\s*transition:\s*scale 0\.15s ease-out,/);
   assert.match(tvStyles, /&:hover \{\s*scale: 1\.08;/);
+});
+
+test('a panel bends at the middle of what it shows, not of its full-height box', () => {
+  assert.match(helper, /for \(const child of Array\.from\(group\.children\)\) \{/);
 });

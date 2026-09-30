@@ -22,10 +22,9 @@ import CFM from "./config";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 50% is what
-// 100% used to be (the user found that too weak); 25% matches the user's terminal wallpaper
-// (Wallpaper Engine), measured from how steeply its corner panels slant toward the middle.
-const MAX_BEND = 0.36;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. The user has
+// asked twice for 100% to be twice as strong; 50% is where the previous 100% was.
+const MAX_BEND = 0.72;
 // How quickly the bend follows a change of strength (time constant, ms).
 const EASE_MS = 120;
 // Set while the curve is drawn, including while it eases out; the curve's CSS keys off it.
@@ -348,10 +347,26 @@ function tick(now: number) {
         return shearedFlat(word, (block && sheared.get(block)) || null, flat?.left ?? 0);
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
+    // A panel's middle is the middle of what it shows, not of its box: in TV mode #fsd-foreground
+    // spans the whole screen height, so its box's middle sat on the midline and left the title,
+    // controls and artwork flat.
     groupRefs = new Map();
     for (const group of container.querySelectorAll(GROUPS)) {
-        const box = group.getBoundingClientRect();
-        if (box.height) groupRefs.set(group, (box.top + box.bottom) / 2);
+        let top = Infinity;
+        let bottom = -Infinity;
+        for (const child of Array.from(group.children)) {
+            const box = child.getBoundingClientRect();
+            if (!box.height || !box.width) continue;
+            top = Math.min(top, box.top);
+            bottom = Math.max(bottom, box.bottom);
+        }
+        if (!Number.isFinite(top)) {
+            const box = group.getBoundingClientRect();
+            if (!box.height) continue;
+            top = box.top;
+            bottom = box.bottom;
+        }
+        groupRefs.set(group, (top + bottom) / 2);
     }
     blocks.forEach((block, i) => {
         const flat = blockFlats[i];
