@@ -82,6 +82,11 @@ const GROUPS =
 // half arc down. Bending by each panel's real distance made the outer panels bend far harder
 // than the lyrics near the middle.
 const ARM = 0.3;
+// Depth: on a screen curved inwards the sides are closer, so things there are drawn a little bigger
+// and things toward the middle a little smaller, evenly in both directions, about their own centres.
+// Without it, strong bends read as panels tilted up rather than a screen curving in. At 100% this
+// is about 9% either way.
+const DEPTH = 0.5;
 let groupRefs = new Map<Element, number>();
 // Each panel's bend lever, eased toward its target so a panel crossing the middle row turns its
 // bend over smoothly.
@@ -92,7 +97,7 @@ const HELD = "#fsd-status, #fsd-progress-parent";
 
 // A sheared box: its top-left corner is lifted by `lift` screen px and each px to the right is
 // lifted `shear` px more.
-type Shear = { shear: number; lift: number };
+type Shear = { shear: number; lift: number; size?: number; shift?: number };
 // A box on the flat layout, in screen px, and the scale its ancestors draw it at.
 type Flat = { left: number; top: number; width: number; height: number; scale: number };
 // A piece moved as a whole: vertical offset and vertical scale about its transform origin.
@@ -182,6 +187,11 @@ function heightAt(x: number, k = bend) {
     return 1 - k * depthAt(x).depth;
 }
 
+// The depth size for something centred at x.
+function sizeAt(x: number) {
+    return 1 + DEPTH * bend * (0.5 - depthAt(x).depth);
+}
+
 // dh/dx.
 function heightSlopeAt(x: number) {
     return -bend * depthAt(x).slope;
@@ -217,11 +227,14 @@ function shearedFlat(element: HTMLElement, parent: Shear | null, parentLeft: num
     const [layoutWidth, layoutHeight] = layoutSize(element);
     if (!box.width || !box.height || !layoutWidth) return null;
     const last = sheared.get(element) ?? { shear: 0, lift: 0 };
-    const scale = box.width / layoutWidth;
+    const size = last.size ?? 1;
+    const width = box.width / size;
+    const left = box.left - (last.shift ?? 0);
+    const scale = width / layoutWidth;
     const shear = last.shear + (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (box.left - parentLeft) : 0;
-    const top = box.top - Math.min(0, shear * box.width) - last.lift - parentLift;
-    return { left: box.left, top, width: box.width, height: layoutHeight * scale, scale };
+    const top = box.top - Math.min(0, size * shear * width) - last.lift - parentLift;
+    return { left, top, width, height: layoutHeight * scale, scale };
 }
 
 // An element's untransformed size. SVG icons have no offsetWidth/offsetHeight, so theirs is read
@@ -275,11 +288,14 @@ function centredFlat(button: HTMLElement): Flat | null {
     const box = button.getBoundingClientRect();
     const [layoutWidth, layoutHeight] = layoutSize(button);
     if (!box.width || !box.height || !layoutWidth) return null;
-    const lift = sheared.get(button)?.lift ?? 0;
-    const scale = box.width / layoutWidth;
+    const last = sheared.get(button);
+    const size = last?.size ?? 1;
+    const width = box.width / size;
+    const scale = width / layoutWidth;
     const height = layoutHeight * scale;
-    const cy = (box.top + box.bottom) / 2 - lift;
-    return { left: box.left, top: cy - height / 2, width: box.width, height, scale };
+    const cx = (box.left + box.right) / 2;
+    const cy = (box.top + box.bottom) / 2 - (last?.lift ?? 0);
+    return { left: cx - width / 2, top: cy - height / 2, width, height, scale };
 }
 
 function placeCentred(button: HTMLElement, flat: Flat) {
@@ -288,11 +304,12 @@ function placeCentred(button: HTMLElement, flat: Flat) {
     const arm = armOf(button, cy);
     const shear = arm * heightSlopeAt(cx);
     const lift = liftAt(cx, arm);
-    sheared.set(button, { shear, lift });
-    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
+    const size = sizeAt(cx);
+    sheared.set(button, { shear, lift, size });
+    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}|${size.toFixed(3)}`;
     if (written.get(button) !== key) {
         written.set(button, key);
-        button.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
+        button.style.transform = `matrix(${size.toFixed(3)}, ${(size * shear).toFixed(4)}, 0, ${size.toFixed(3)}, 0, ${(lift / flat.scale).toFixed(2)})`;
     }
 }
 
@@ -322,20 +339,36 @@ function fadeWord(word: HTMLElement, flat: Flat) {
     word.style.webkitMaskImage = mask;
 }
 
-function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
+// Where depth sizing moves the centre `cx` of something anchored at `anchor` (the edge of its row
+// nearest the screen edge): distances from the anchor grow and shrink with the size, so spacing
+// between words keeps its proportions and the gap to the screen edge stays the same.
+function depthCentre(cx: number, anchor: number) {
+    return anchor + (cx - anchor) * sizeAt((anchor + cx) / 2);
+}
+
+// The anchor for a row or an element: its edge nearest the screen edge.
+function outerEdge(flat: Flat) {
+    return flat.left + flat.width / 2 < window.innerWidth / 2 ? flat.left : flat.left + flat.width;
+}
+
+function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0, anchor = outerEdge(flat)) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
     const arm = armOf(word, cy);
     const totalShear = arm * heightSlopeAt(cx);
-    const targetTop = cy + liftAt(cx, arm) - pin - totalShear * (flat.width / 2) - flat.height / 2;
+    // Scaled about its centre by the depth size, and moved with its row (see depthCentre).
+    const size = sizeAt(cx);
+    const shift = depthCentre(cx, anchor) - cx + ((1 - size) * flat.width) / 2;
+    const targetTop = cy + liftAt(cx, arm) - pin - size * (totalShear * (flat.width / 2) + flat.height / 2);
     const shear = totalShear - (parent?.shear ?? 0);
-    const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
+    const parentLift = parent ? parent.lift + parent.shear * (flat.left + shift - parentLeft) : 0;
     const lift = targetTop - flat.top - parentLift;
-    sheared.set(word, { shear, lift });
-    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
+    sheared.set(word, { shear, lift, size, shift });
+    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}|${size.toFixed(3)}`;
     if (written.get(word) !== key) {
         written.set(word, key);
-        word.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
+        const s = size.toFixed(3);
+        word.style.transform = `matrix(${s}, ${(size * shear).toFixed(4)}, 0, ${s}, ${(shift / flat.scale).toFixed(2)}, ${(lift / flat.scale).toFixed(2)})`;
     }
 }
 
@@ -474,7 +507,7 @@ function tick(now: number) {
         if (!flat) return;
         const blockFlat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
         const pin = (block && linePin.get(block)) || 0;
-        placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin);
+        placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin, blockFlat ? outerEdge(blockFlat) : outerEdge(flat));
         if (block && linePin.has(block)) fadeWord(word, flat);
     });
     const held = container.classList.contains("controls-held");

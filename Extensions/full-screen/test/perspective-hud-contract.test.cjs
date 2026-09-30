@@ -38,7 +38,9 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.match(helper, /const half = x < cx \? cx - margins\.left : margins\.right - cx;/);
   // Words, the artwork and the progress bar are sheared (upright edges stay upright) and scaled
   // only vertically; no sideways scale, and nothing is resampled, so edges stay anti-aliased.
-  assert.match(helper, /word\.style\.transform = `matrix\(1, \$\{shear\.toFixed\(4\)\}, 0, 1, 0, /);
+  assert.match(helper, /word\.style\.transform = `matrix\(\$\{s\}, \$\{\(size \* shear\)\.toFixed\(4\)\}, 0, \$\{s\}, /);
+  // Depth: sides a little bigger, middle a little smaller, evenly (no squash).
+  assert.match(helper, /return 1 \+ DEPTH \* bend \* \(0\.5 - depthAt\(x\)\.depth\);/);
   assert.match(helper, /piece\.style\.translate = `0 \$\{dy\.toFixed\(1\)\}px`/);
   assert.doesNotMatch(helper, /piece\.style\.scale =/, 'nothing is squashed');
   assert.match(helper, /placeSheared\(element, flat, null, 0\);/);
@@ -114,7 +116,7 @@ test('lyrics fade out at the top and bottom instead of being cut off', () => {
 
 test('control buttons bend with the curve, hover backgrounds included', () => {
   assert.match(helper, /const BUTTONS = \[".fsd-controls button", ".extra-controls button", "#fad-lyrics-plus-container \.lyrics-config-button"\]/);
-  assert.match(helper, /button\.style\.transform = `matrix\(1, \$\{shear\.toFixed\(4\)\}, 0, 1, 0, /);
+  assert.match(helper, /button\.style\.transform = `matrix\(\$\{size\.toFixed\(3\)\}, \$\{\(size \* shear\)\.toFixed\(4\)\}, 0, \$\{size\.toFixed\(3\)\}, 0, /);
   assert.doesNotMatch(helper, /const PIECES = \[\s*"\.fsd-controls button"/);
   // Their hover zoom moves to `scale`, and their transform is not eased behind the curve.
   assert.match(tvStyles, /\.fs-button,\s*\.lyrics-config-button \{\s*transform-origin: 50% 50%;\s*transition:\s*scale 0\.15s ease-out,/);
@@ -135,4 +137,9 @@ test('the progress bar follows the curve point by point, not as a straight tilte
 test('the background warp hides its 8-bit steps', () => {
   assert.match(helper, /const BAYER = \[/);
   assert.match(helper, /<feGaussianBlur stdDeviation="\$\{Math\.max\(1, \(1\.5 \* range\) \/ 255\)\.toFixed\(1\)\}" edgeMode="duplicate" result="bent"\/>/);
+});
+
+test('depth sizing keeps word spacing in proportion and the edge padding unchanged', () => {
+  assert.match(helper, /return anchor \+ \(cx - anchor\) \* sizeAt\(\(anchor \+ cx\) \/ 2\);/);
+  assert.match(helper, /const shift = depthCentre\(cx, anchor\) - cx \+ \(\(1 - size\) \* flat\.width\) \/ 2;/);
 });
