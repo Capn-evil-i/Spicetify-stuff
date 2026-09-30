@@ -42,20 +42,25 @@ const WORD = "fsd-curve-word";
 // Small pieces that move with the curve as a whole. The perspective slider itself is left flat:
 // bending it would move the track under the pointer while it is being dragged.
 const PIECES = [
-    "#fsd-ctx-icon",
-    "#fsd-title > svg",
-    "#fsd-artist > svg",
-    "#fsd-album > svg",
     ".fsd-controls button",
     ".extra-controls button",
-    "#fsd-elapsed",
-    "#fsd-duration",
     "#fsd_next_tit_art",
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
-// Images and shapes too wide to move as a whole: sheared like words (no transform of their own).
-const BENT = ["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"].join(", ");
+// Images, icons and shapes without a transform of their own: sheared like words, so they bend
+// with the curve too (the disc icon, the artwork, the progress bar and its times).
+const BENT = [
+    "#fsd-art",
+    "#fsd-progress-bar",
+    "#fsd_next_art",
+    "#fsd-ctx-icon",
+    "#fsd-title > svg",
+    "#fsd-artist > svg",
+    "#fsd-album > svg",
+    "#fsd-elapsed",
+    "#fsd-duration",
+].join(", ");
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
 const DEFS = "fsd-curve-defs";

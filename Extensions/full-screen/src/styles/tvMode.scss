@@ -13,13 +13,6 @@
         }
     }
 
-    // Synced lines fade out toward the top and bottom of the lyrics area, like Apple Music, instead
-    // of being cut off at its edges. The mask sits on the synced page (the box that clips the
-    // lines), not the whole container, so the lyrics-plus buttons in its corner stay fully visible.
-    #fad-lyrics-plus-container .lyrics-lyricsContainer-SyncedLyricsPage {
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
-        mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
-    }
 
     #fsd-foreground {
         flex-direction: row;
@@ -128,24 +121,6 @@
         }
     }
 
-    #fsd-status.active,
-    #fsd-progress-parent {
-        interpolate-size: allow-keywords;
-        height: auto;
-        transition:
-            height 0.4s var(--transition-function),
-            margin 0.4s var(--transition-function);
-    }
-
-    // Once every auto-hidden row has faded out, drop its space so the details settle at the bottom.
-    &.controls-collapsed {
-        #fsd-status.active,
-        #fsd-progress-parent {
-            height: 0;
-            margin: 0;
-            overflow: hidden;
-        }
-    }
 }
 
 // Keep TV mode inside the viewport on compact and portrait displays.
@@ -374,7 +349,7 @@
 // the curve (transforms need a box, not an inline run). Words and text blocks are sheared from
 // their top-left corner. Text blocks keep clipping for their line clamps, with a little room for
 // what their words bend past the block's own slope.
-#full-screen-display[mode="tv"].hud-perspective {
+#full-screen-display.hud-perspective {
     fsd-curve-word {
         display: inline-block;
         transform-origin: 0 0;
@@ -387,8 +362,25 @@
     #fsd_up_next_text,
     #fsd-art,
     #fsd-progress-bar,
-    #fsd_next_art {
+    #fsd_next_art,
+    #fsd-ctx-icon,
+    #fsd-title > svg,
+    #fsd-artist > svg,
+    #fsd-album > svg,
+    #fsd-elapsed,
+    #fsd-duration {
         transform-origin: 0 0;
+    }
+
+    // Link underlines cannot reach into the word boxes and would only mark the spaces between
+    // them (DAYS_BEFORE_RODEO); each word draws its own underline instead.
+    .fsd-song-meta span:hover,
+    .fsd-artist-list span:hover {
+        text-decoration: none;
+
+        fsd-curve-word {
+            text-decoration: underline;
+        }
     }
 
     // These icons animate every property; the curve moves them each frame, so its offsets must

@@ -104,10 +104,7 @@ async function main() {
         DOM.container.classList.toggle("glow-progress", Boolean(CFM.get("glowProgressBar")));
         DOM.container.classList.toggle("glow-controls", Boolean(CFM.get("glowControls")));
         DOM.container.classList.toggle("glow-art", Boolean(CFM.get("glowArt")));
-        DOM.container.classList.toggle(
-            "hud-perspective",
-            CFM.getMode() === "tv" && Boolean(CFM.get("hudPerspective")),
-        );
+        DOM.container.classList.toggle("hud-perspective", Boolean(CFM.get("hudPerspective")));
         setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
         Utils.toggleQueuePanel(DOM.queue, false);
         DOM.container.classList.toggle(
@@ -371,6 +368,8 @@ async function main() {
             DOM.coverImg.src = ICONS.OFFLINE_SVG;
         };
         DOM.coverImg.onload = () => {
+            // The artwork glow is a blurred copy of the artwork itself, so it glows in its own colours.
+            DOM.container.style.setProperty("--fsd-art-url", `url(${JSON.stringify(DOM.coverImg.src)})`);
             if (DOM.cover.isConnected) Utils.fadeBackgroundImage(DOM.cover, DOM.coverImg.src);
         };
         DOM.coverImg.src = meta.image_xlarge_url;
@@ -416,13 +415,20 @@ async function main() {
 
     const controlsObserver = new MutationObserver(updateControlsCollapsed);
 
+    // The buttons row and the progress bar each drop their space once their timer has faded them,
+    // so whatever is still shown moves up into it (the progress bar takes the buttons' place when
+    // it stays visible, as in the default mode).
     function updateControlsCollapsed() {
-        const rows = DOM.container.querySelectorAll<HTMLElement>(".fsd-controls, #fsd-progress-container");
+        const controls = DOM.container.querySelectorAll<HTMLElement>("#fsd-status .fsd-controls");
+        const progress = DOM.container.querySelector<HTMLElement>("#fsd-progress-container");
         // Hovered rows stay visible through CSS even after their timer fades them, so they must not collapse
         // under the pointer (the progress bar would slide over the buttons).
         const hovered = DOM.container.querySelector("#fsd-status:hover, #fsd-progress-parent:hover");
-        const allHidden = !hovered && rows.length > 0 && Array.from(rows).every((row) => row.style.opacity === "0");
-        DOM.container.classList.toggle("controls-collapsed", allHidden);
+        const controlsHidden =
+            !hovered && controls.length > 0 && Array.from(controls).every((row) => row.style.opacity === "0");
+        const progressHidden = !hovered && Boolean(progress) && progress!.style.opacity === "0";
+        DOM.container.classList.toggle("controls-collapsed", controlsHidden);
+        DOM.container.classList.toggle("progress-collapsed", progressHidden);
     }
 
     function handleMouseMoveActivation() {
@@ -459,7 +465,7 @@ async function main() {
 
     function handleMouseMoveDeactivation() {
         controlsObserver.disconnect();
-        DOM.container.classList.remove("controls-collapsed");
+        DOM.container.classList.remove("controls-collapsed", "progress-collapsed");
         DOM.container.removeEventListener("mousemove", hideCursor);
         DOM.container.removeEventListener("mousemove", Context.hideContext.bind(Context));
         DOM.container.removeEventListener("mousemove", ExtraControls.hideExtraControls.bind(ExtraControls));
@@ -602,9 +608,7 @@ async function main() {
                     DOM.container.querySelector("#fsd-volume-parent"),
                 );
             }
-            if (CFM.getMode() === "tv") {
-                ReactDOM.render(<PerspectiveBar />, DOM.container.querySelector("#fsd-perspective-parent"));
-            }
+            ReactDOM.render(<PerspectiveBar />, DOM.container.querySelector("#fsd-perspective-parent"));
             if (CFM.get("icons")) {
                 updatePlayingIcon({ data: { is_paused: !Spicetify.Player.isPlaying() } });
                 Spicetify.Player.addEventListener("onplaypause", updatePlayingIcon);

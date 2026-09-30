@@ -97,7 +97,8 @@ test('player-control glow covers volume and overview buttons, including active c
     assert.ok(styles.includes(selector), `${selector} should share the player-control glow`);
   }
   assert.match(styles, /filter: saturate\(1\.5\) contrast\(1\.5\) var\(--fsd-control-glow/);
-  assert.match(styles, /--fsd-control-glow: drop-shadow\(0 0 3px var\(--fsd-glow-highlight\)\)/);
+  // Controls glow in their own colour (their fill), not a theme colour laid on top.
+  assert.match(styles, /--fsd-control-glow: drop-shadow\(0 0 2px var\(--fsd-own-glow\)\)/);
   assert.match(styles, /#fsd-volume-bar\s*\{[^}]*box-shadow:[^;]*!important;/);
   assert.match(styles, /#fsd-volume-bar-inner,[\s\S]*?#volume-thumb\s*\{[^}]*box-shadow:[^}]*!important;/);
 });
@@ -108,14 +109,15 @@ test('TV lyrics keep scrolling available without painting a native scrollbar at 
   assert.match(tv, /&::-webkit-scrollbar\s*\{[^}]*display:\s*none\s*!important/);
 });
 
-test('album-art glow stays within the same restrained 12px radius', () => {
+test('album-art glow uses the artwork colours, not a theme halo', () => {
   const start = styles.indexOf('&.glow-art {');
   const end = styles.indexOf('&:not(.glow-art)', start);
   const art = styles.slice(start, end);
   assert.ok(start >= 0 && end > start);
-  assert.match(art, /0 0 12px/);
-  assert.doesNotMatch(art, /0 0 (20|24|36)px/);
-  assert.match(art, /#fsd-art-inner\s*\{\s*box-shadow: none !important;/);
+  assert.match(art, /background-image: var\(--fsd-art-url\);/);
+  assert.match(art, /filter: blur\(22px\) saturate\(1\.3\);/);
+  assert.doesNotMatch(art, /var\(--fsd-glow-color\)/);
+  assert.match(art, /#fsd-art-inner,\s*#fsd-art-image \{\s*box-shadow: none !important;/);
 });
 
 test('text, controls, progress, and artwork share the active-lyrics glow strength', () => {
@@ -157,9 +159,9 @@ test('TV mode fits lyrics, metadata, and controls on narrow screens', () => {
   assert.doesNotMatch(compactLayout, /\.lyrics-lyricsContainer-LyricsLine-active\s*\{\s*font-size:/);
 });
 
-test('Perspective HUD is opt-in, TV-only, and curves the HUD on compact displays too', () => {
+test('Perspective HUD is opt-in, works in every fullscreen mode, and curves compact displays too', () => {
   assert.match(defaults, /hudPerspective: false/);
-  assert.match(app, /CFM\.getMode\(\) === "tv" && Boolean\(CFM\.get\("hudPerspective"\)\)/);
+  assert.match(app, /classList\.toggle\("hud-perspective", Boolean\(CFM\.get\("hudPerspective"\)\)\)/);
   assert.match(configUi, /translations\[LOCALE\]\.settings\.hudPerspective[\s\S]*?"hudPerspective"/);
   assert.match(english, /"hudPerspective": "Perspective HUD"/);
   assert.match(defaults, /hudPerspectiveStrength: 40/);

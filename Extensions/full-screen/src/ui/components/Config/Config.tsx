@@ -111,10 +111,7 @@ export class ConfigManager {
         for (const [key, className] of Object.entries(glowClasses) as [keyof typeof glowClasses, string][]) {
             DOM.container.classList.toggle(className, Boolean(CFM.get(key)));
         }
-        DOM.container.classList.toggle(
-            "hud-perspective",
-            CFM.getMode() === "tv" && Boolean(CFM.get("hudPerspective")),
-        );
+        DOM.container.classList.toggle("hud-perspective", Boolean(CFM.get("hudPerspective")));
         setHudPerspectiveStrength(DOM.container, Number(CFM.get("hudPerspectiveStrength")));
     }
 
@@ -447,31 +444,27 @@ export class ConfigManager {
                 "lyricsAlignment",
                 (value: string) => this.saveOption("lyricsAlignment", value),
             ),
-            ...(CFM.getMode() === "tv"
-                ? [
-                    this.createToggle(
-                        translations[LOCALE].settings.hudPerspective,
-                        "hudPerspective",
-                        (value) => this.saveOption("hudPerspective", value),
-                        translations[LOCALE].settings.hudPerspectiveDescription,
-                    ),
-                    this.createRange(
-                        translations[LOCALE].settings.hudPerspectiveStrength,
-                        "hudPerspectiveStrength",
-                        Number(CFM.get("hudPerspectiveStrength")),
-                        0,
-                        100,
-                        (value) => this.saveOption("hudPerspectiveStrength", value),
-                        translations[LOCALE].settings.hudPerspectiveStrengthDescription,
-                    ),
-                    this.createToggle(
-                        translations[LOCALE].settings.hudPerspectiveBackground,
-                        "hudPerspectiveBackground",
-                        (value) => this.saveOption("hudPerspectiveBackground", value),
-                        translations[LOCALE].settings.hudPerspectiveBackgroundDescription,
-                    ),
-                ]
-                : []),
+            this.createToggle(
+                translations[LOCALE].settings.hudPerspective,
+                "hudPerspective",
+                (value) => this.saveOption("hudPerspective", value),
+                translations[LOCALE].settings.hudPerspectiveDescription,
+            ),
+            this.createRange(
+                translations[LOCALE].settings.hudPerspectiveStrength,
+                "hudPerspectiveStrength",
+                Number(CFM.get("hudPerspectiveStrength")),
+                0,
+                100,
+                (value) => this.saveOption("hudPerspectiveStrength", value),
+                translations[LOCALE].settings.hudPerspectiveStrengthDescription,
+            ),
+            this.createToggle(
+                translations[LOCALE].settings.hudPerspectiveBackground,
+                "hudPerspectiveBackground",
+                (value) => this.saveOption("hudPerspectiveBackground", value),
+                translations[LOCALE].settings.hudPerspectiveBackgroundDescription,
+            ),
             headerText(translations[LOCALE].settings.glowHeader),
             this.createGlowAllToggle(LOCALE),
             this.createGlowToggle(translations[LOCALE].settings.glowLyrics, "glowLyrics"),

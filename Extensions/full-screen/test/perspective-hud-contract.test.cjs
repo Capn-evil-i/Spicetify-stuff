@@ -45,7 +45,7 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
   assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
-  assert.match(helper, /const BENT = \["#fsd-art", "#fsd-progress-bar", "#fsd_next_art"\]/);
+  assert.match(helper, /const BENT = \[\s*"#fsd-art",\s*"#fsd-progress-bar",\s*"#fsd_next_art",\s*"#fsd-ctx-icon",/);
   assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
@@ -93,9 +93,9 @@ test('phone lyrics get enough scroll viewport to keep the active line visible', 
   assert.match(tvStyles, /@media \(max-width: 340px\)[\s\S]*?#fad-lyrics-plus-container\s*\{\s*top: -12px;[\s\S]*?height: calc\(95% \+ 160px\) !important/);
 });
 
-test('TV lyrics fade out at the top and bottom instead of being cut off', () => {
+test('lyrics fade out at the top and bottom instead of being cut off', () => {
   // On the synced page (the box that clips the lines), not the container holding the buttons, and
   // not the zero-height lines wrapper, which would hide everything.
-  assert.match(tvStyles, /#fad-lyrics-plus-container \.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: linear-gradient\(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%\);/);
+  assert.match(baseStyles, /\.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: linear-gradient\(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%\);/);
   assert.doesNotMatch(tvStyles, /\.lyrics-lyricsContainer-SyncedLyrics,|\.lyrics-lyricsContainer-SyncedLyrics \{[^}]*mask/);
 });

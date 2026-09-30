@@ -353,6 +353,54 @@
         .lyrics-config-button {
             margin-right: 20px;
         }
+
+        // Synced lines fade out toward the top and bottom of the lyrics area, like Apple Music,
+        // instead of being cut off at its edges. The mask sits on the synced page (the box that
+        // clips the lines), not the container holding the buttons.
+        .lyrics-lyricsContainer-SyncedLyricsPage {
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+        }
+
+        // The lyrics-plus buttons sit in the screen's bottom-right corner, styled like the
+        // fullscreen controls instead of lyrics-plus's dark squares.
+        .lyrics-config-button-container {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            margin: 0;
+            z-index: 5;
+        }
+
+        .lyrics-config-button {
+            margin: 0 0 0 6px;
+            border-radius: 8px;
+            background-color: transparent;
+            color: var(--primary-color);
+            transition: background-color 0.2s ease;
+
+            &:hover {
+                background-color: var(--theme-hover-color, rgba(255, 255, 255, 0.12));
+            }
+        }
+    }
+
+    // The buttons row and the progress bar each drop their space once their timer has faded them
+    // (see updateControlsCollapsed), so what is still shown moves up instead of leaving a gap.
+    #fsd-status.active,
+    #fsd-progress-parent {
+        interpolate-size: allow-keywords;
+        height: auto;
+        transition:
+            height 0.4s var(--transition-function),
+            margin 0.4s var(--transition-function);
+    }
+
+    &.controls-collapsed #fsd-status.active,
+    &.progress-collapsed #fsd-progress-parent {
+        height: 0;
+        margin: 0;
+        overflow: hidden;
     }
 
     &.glow-lyrics #fad-lyrics-plus-container {
@@ -518,8 +566,15 @@
         }
     }
 
+    // Controls glow in their own colour (the icons' and bars' fill), not a theme colour laid on top.
+    --fsd-own-glow: color-mix(in srgb, var(--primary-color) 70%, transparent);
+
+    &.themed-icons {
+        --fsd-own-glow: color-mix(in srgb, var(--theme-main-color) 70%, transparent);
+    }
+
     &.glow-controls {
-        --fsd-control-glow: drop-shadow(0 0 3px var(--fsd-glow-highlight)) drop-shadow(0 0 12px var(--fsd-glow-color));
+        --fsd-control-glow: drop-shadow(0 0 2px var(--fsd-own-glow)) drop-shadow(0 0 8px var(--fsd-own-glow));
 
         #fsd-volume {
             text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
@@ -528,14 +583,21 @@
         #fsd-volume-bar {
             // Bloom's global `* { box-shadow: none !important; }` reset otherwise
             // strips this narrow control even though the volume label still glows.
-            box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
+            box-shadow: 0 0 2px var(--fsd-own-glow), 0 0 8px var(--fsd-own-glow) !important;
         }
 
         #fsd-volume-bar-inner,
-        #volume-thumb {
+        #volume-thumb,
+        #fsd-perspective-bar-inner,
+        #perspective-thumb,
+        #fsd-perspective-toggle {
             box-shadow:
-                0 0 3px var(--fsd-glow-highlight),
-                0 0 12px var(--fsd-glow-color) !important;
+                0 0 2px var(--fsd-own-glow),
+                0 0 8px var(--fsd-own-glow) !important;
+        }
+
+        #fsd-perspective-label {
+            text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
         }
 
         #fsd-time-display {
@@ -566,13 +628,31 @@
         transition: filter 0.25s ease;
     }
 
+    // The artwork glows in its own colours: a blurred copy of it sits behind it, like an ambient
+    // light, instead of a theme-coloured halo. It hangs off #fsd-art because #fsd-art-image clips
+    // its children to its rounded corners.
     &.glow-art {
-        #fsd-art-inner {
-            box-shadow: none !important;
+        #fsd-art {
+            position: relative;
+            isolation: isolate;
+
+            &::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                z-index: -1;
+                border-radius: inherit;
+                background-image: var(--fsd-art-url);
+                background-size: cover;
+                background-position: center;
+                filter: blur(22px) saturate(1.3);
+                opacity: 0.8;
+                pointer-events: none;
+            }
         }
+        #fsd-art-inner,
         #fsd-art-image {
-            box-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color) !important;
-            transition: box-shadow 0.3s ease;
+            box-shadow: none !important;
         }
     }
     &:not(.glow-art) {
