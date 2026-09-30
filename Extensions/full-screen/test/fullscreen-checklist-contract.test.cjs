@@ -88,7 +88,8 @@ test('the clock card moves as one piece, and lyrics fade along the curve', () =>
   const helper = read('utils', 'hud-perspective.ts');
   assert.match(helper, /"#fsd-overview-card",\s*\]\.join/);
   assert.doesNotMatch(helper, /"#fsd-overview-card > \*"/);
-  assert.match(helper, /function lyricFade\(flat: Flat\)/);
+  assert.match(helper, /function fadeWord\(word: HTMLElement, flat: Flat\)/);
+  assert.match(helper, /linear-gradient\(rgba\(0,0,0,\$\{top\}\), rgba\(0,0,0,\$\{bottom\}\)\)/);
   assert.match(tvStyles, /\.lyrics-lyricsContainer-SyncedLyricsPage \{\s*-webkit-mask-image: none;\s*mask-image: none;\s*overflow: visible;/);
 });
 

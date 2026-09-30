@@ -157,8 +157,10 @@ function stop() {
 }
 
 function reset(element: HTMLElement) {
-    for (const property of ["transform", "translate", "scale", "opacity"]) {
-        if (property !== "opacity" || element.tagName === WORD.toUpperCase()) element.style.removeProperty(property);
+    for (const property of ["transform", "translate", "scale"]) element.style.removeProperty(property);
+    if (element.tagName === WORD.toUpperCase()) {
+        element.style.removeProperty("mask-image");
+        element.style.removeProperty("-webkit-mask-image");
     }
     sheared.delete(element);
     moved.delete(element);
@@ -302,10 +304,22 @@ const smooth = (t: number) => {
     return c * c * (3 - 2 * c);
 };
 
-function lyricFade(flat: Flat) {
+function lyricFadeAt(y: number) {
     if (!lyricsArea || !lyricsArea.height) return 1;
-    const t = (flat.top + flat.height / 2 - lyricsArea.top) / lyricsArea.height;
+    const t = (y - lyricsArea.top) / lyricsArea.height;
     return Math.min(smooth(t / 0.14), smooth((1 - t) / 0.2));
+}
+
+// Each word gets a vertical gradient mask from the fade at its unbent top to the fade at its
+// unbent bottom, so the fade runs smoothly through words and along a line (a single opacity per
+// word left lines blotchy where they crossed the fade).
+function fadeWord(word: HTMLElement, flat: Flat) {
+    const top = lyricFadeAt(flat.top).toFixed(2);
+    const bottom = lyricFadeAt(flat.top + flat.height).toFixed(2);
+    const mask = top === "1.00" && bottom === "1.00" ? "" : `linear-gradient(rgba(0,0,0,${top}), rgba(0,0,0,${bottom}))`;
+    if (word.style.maskImage === mask || (mask === "" && !word.style.maskImage)) return;
+    word.style.maskImage = mask;
+    word.style.webkitMaskImage = mask;
 }
 
 function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
@@ -461,10 +475,7 @@ function tick(now: number) {
         const blockFlat = block ? blockFlats[blockIndex.get(block) ?? -1] : null;
         const pin = (block && linePin.get(block)) || 0;
         placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin);
-        if (block && linePin.has(block)) {
-            const fade = lyricFade(flat).toFixed(2);
-            if (word.style.opacity !== (fade === "1.00" ? "" : fade)) word.style.opacity = fade === "1.00" ? "" : fade;
-        }
+        if (block && linePin.has(block)) fadeWord(word, flat);
     });
     const held = container.classList.contains("controls-held");
     pieces.forEach((piece, i) => {
