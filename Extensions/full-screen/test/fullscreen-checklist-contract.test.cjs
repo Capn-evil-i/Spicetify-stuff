@@ -95,3 +95,10 @@ test('the clock card moves as one piece, and lyrics fade along the curve', () =>
 test('nothing clips the curved lyrics with a straight edge', () => {
   assert.match(tvStyles, /\.lyrics-lyricsContainer-LyricsContainer:has\(\.lyrics-lyricsContainer-SyncedLyricsPage\) \{\s*overflow: visible !important;/);
 });
+
+test('fade animations do not knock elements off the curve', () => {
+  const start = baseStyles.indexOf('@keyframes fadeUp');
+  const block = baseStyles.slice(start, baseStyles.indexOf('.fade-do {'));
+  assert.doesNotMatch(block, /transform:/);
+  assert.match(block, /translate: 0 10px;/);
+});

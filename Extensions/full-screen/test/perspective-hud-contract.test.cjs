@@ -26,7 +26,10 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   // and steepest toward the edges instead of flattening off near them.
   assert.match(helper, /return \{ depth: 1 - u \* u, slope: \(-2 \* u\) \/ half \};/);
   assert.doesNotMatch(helper, /Math\.cos\(Math\.PI \* u\)/);
-  assert.match(helper, /const liftAt = \(x: number, ref: number\) => armFor\(ref\) \* \(heightAt\(x\) - 1\);/);
+  assert.match(helper, /const liftAt = \(x: number, arm: number\) => arm \* \(heightAt\(x\) - 1\);/);
+  // Panels ease their bend when they cross the middle row, and strength changes ease too.
+  assert.match(helper, /groupArms\.set\(group, current === undefined \? target : current \+ \(target - current\) \* easeStep\);/);
+  assert.match(helper, /const EASE_MS = 250;/);
   // Every panel bends by the same amount, whatever its distance from the middle row.
   assert.match(helper, /const ARM = 0\.3;/);
   // Clusters bend as one panel, so text keeps its height and rows keep their spacing.
@@ -54,7 +57,7 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.doesNotMatch(helper, /function placeArt\(/);
   assert.doesNotMatch(tvStyles, /#fsd-art-image::after/);
   // The bend eases instead of snapping.
-  assert.match(helper, /bend \+= \(targetBend - bend\) \* \(1 - Math\.exp\(-elapsed \/ EASE_MS\)\);/);
+  assert.match(helper, /easeStep = 1 - Math\.exp\(-elapsed \/ EASE_MS\);\s*bend \+= \(targetBend - bend\) \* easeStep;/);
   assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
@@ -124,7 +127,7 @@ test('a panel bends at the middle of what it shows, not of its full-height box',
 
 test('the progress bar follows the curve point by point, not as a straight tilted line', () => {
   assert.match(helper, /function drawProgressCurve\(bar: HTMLElement, flat: Flat\)/);
-  assert.match(helper, /const pointAt = \(x: number\) => \[x - origin\.left, cy \+ liftAt\(x, ref\) - origin\.top\];/);
+  assert.match(helper, /const pointAt = \(x: number\) => \[x - origin\.left, cy \+ liftAt\(x, arm\) - origin\.top\];/);
   assert.match(tvStyles, /#fsd-progress-bar \{\s*position: relative;\s*background: transparent !important;\s*> \* \{\s*opacity: 0;/);
   assert.match(tvStyles, /#fsd-progress-curve \{\s*position: fixed;/);
 });

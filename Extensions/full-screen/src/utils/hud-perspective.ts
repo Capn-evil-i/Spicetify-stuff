@@ -25,8 +25,9 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 // At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline (the user's
 // chosen maximum, after trying 0.18 and 0.72).
 const MAX_BEND = 0.36;
-// How quickly the bend follows a change of strength (time constant, ms).
-const EASE_MS = 120;
+// How quickly the bend follows a change (time constant, ms): strength, switching it on or off, and
+// a panel's bend flipping when it moves to the other half of the screen all ease instead of snap.
+const EASE_MS = 250;
 // Set while the curve is drawn, including while it eases out; the curve's CSS keys off it.
 const CURVING = "hud-curving";
 
@@ -82,6 +83,10 @@ const GROUPS =
 // than the lyrics near the middle.
 const ARM = 0.3;
 let groupRefs = new Map<Element, number>();
+// Each panel's bend lever, eased toward its target so a panel crossing the middle row turns its
+// bend over smoothly.
+const groupArms = new Map<Element, number>();
+let easeStep = 1;
 // Rows the curve leaves alone while the pointer is over them (app.tsx sets controls-held).
 const HELD = "#fsd-status, #fsd-progress-parent";
 
@@ -193,6 +198,12 @@ function armFor(ref: number) {
     return (ref >= midline() ? 1 : -1) * ARM * window.innerHeight;
 }
 
+// The eased lever of the panel an element belongs to (or its own, outside any panel).
+function armOf(element: Element, ownY: number) {
+    const group = element.closest(GROUPS);
+    return (group && groupArms.get(group)) ?? armFor(refFor(element, ownY));
+}
+
 function onScreen(box: Flat) {
     return box.left + box.width > 0 && box.left < window.innerWidth && box.top + box.height > 0 && box.top < window.innerHeight;
 }
@@ -234,15 +245,15 @@ function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
 
 // How far the curve moves a point vertically.
 // How far the curve moves a panel whose middle is at height `ref`, at x.
-const liftAt = (x: number, ref: number) => armFor(ref) * (heightAt(x) - 1);
+const liftAt = (x: number, arm: number) => arm * (heightAt(x) - 1);
 
 // Shears a text block so its centre lands on the curve and its slope follows the curve there.
 function placeBlock(block: HTMLElement, flat: Flat): Shear {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const ref = refFor(block, cy);
-    const shear = armFor(ref) * heightSlopeAt(cx);
-    const lift = liftAt(cx, ref) - shear * (flat.width / 2);
+    const arm = armOf(block, cy);
+    const shear = arm * heightSlopeAt(cx);
+    const lift = liftAt(cx, arm) - shear * (flat.width / 2);
     sheared.set(block, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(block) !== key) {
@@ -272,9 +283,9 @@ function centredFlat(button: HTMLElement): Flat | null {
 function placeCentred(button: HTMLElement, flat: Flat) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const ref = refFor(button, cy);
-    const shear = armFor(ref) * heightSlopeAt(cx);
-    const lift = liftAt(cx, ref);
+    const arm = armOf(button, cy);
+    const shear = arm * heightSlopeAt(cx);
+    const lift = liftAt(cx, arm);
     sheared.set(button, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(button) !== key) {
@@ -300,9 +311,9 @@ function lyricFade(flat: Flat) {
 function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const ref = refFor(word, cy);
-    const totalShear = armFor(ref) * heightSlopeAt(cx);
-    const targetTop = cy + liftAt(cx, ref) - pin - totalShear * (flat.width / 2) - flat.height / 2;
+    const arm = armOf(word, cy);
+    const totalShear = arm * heightSlopeAt(cx);
+    const targetTop = cy + liftAt(cx, arm) - pin - totalShear * (flat.width / 2) - flat.height / 2;
     const shear = totalShear - (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
     const lift = targetTop - flat.top - parentLift;
@@ -318,7 +329,7 @@ function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, paren
 function placePiece(piece: HTMLElement, flat: Flat & { origin: number }): Move {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const dy = liftAt(cx, refFor(piece, cy));
+    const dy = liftAt(cx, armOf(piece, cy));
     const move = { dy, tall: 1 };
     moved.set(piece, move);
     const key = dy.toFixed(1);
@@ -354,7 +365,8 @@ function tick(now: number) {
     }
     const elapsed = Math.min(100, Math.max(0, now - lastTime));
     lastTime = now;
-    bend += (targetBend - bend) * (1 - Math.exp(-elapsed / EASE_MS));
+    easeStep = 1 - Math.exp(-elapsed / EASE_MS);
+    bend += (targetBend - bend) * easeStep;
     if (Math.abs(targetBend - bend) < 0.0005) bend = targetBend;
     if (bend === 0 && targetBend === 0) {
         stop();
@@ -416,6 +428,11 @@ function tick(now: number) {
         });
         if (Number.isFinite(top)) groupRefs.set(lyrics, (top + bottom) / 2);
     }
+    for (const [group, ref] of groupRefs) {
+        const target = armFor(ref);
+        const current = groupArms.get(group);
+        groupArms.set(group, current === undefined ? target : current + (target - current) * easeStep);
+    }
     const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
     const previousMargins = margins.left;
     updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
@@ -431,7 +448,7 @@ function tick(now: number) {
         const flat = blockFlats[i];
         if (!flat || !onScreen(flat)) return;
         if (block.matches(LYRIC_LINES)) {
-            linePin.set(block, liftAt(flat.left + flat.width / 2, refFor(block, flat.top + flat.height / 2)));
+            linePin.set(block, liftAt(flat.left + flat.width / 2, armOf(block, flat.top + flat.height / 2)));
             blockNow.set(block, { shear: 0, lift: 0 });
         } else {
             blockNow.set(block, placeBlock(block, flat));
@@ -501,10 +518,10 @@ function drawProgressCurve(bar: HTMLElement, flat: Flat) {
     const origin = svg.getBoundingClientRect();
     const thickness = flat.height;
     const cy = flat.top + flat.height / 2;
-    const ref = refFor(bar, cy);
+    const arm = armOf(bar, cy);
     const start = flat.left + thickness / 2;
     const end = flat.left + flat.width - thickness / 2;
-    const pointAt = (x: number) => [x - origin.left, cy + liftAt(x, ref) - origin.top];
+    const pointAt = (x: number) => [x - origin.left, cy + liftAt(x, arm) - origin.top];
     const pathTo = (stop: number) => {
         const steps = Math.max(2, Math.ceil((stop - start) / 12));
         let d = "";
