@@ -15,7 +15,17 @@ export class PlayerControls {
         }
     }
 
+    // Used as a mousemove listener, so it takes no delay argument: the controls hide 1.5s after the
+    // mouse stops moving, or straight away through hidePlayerControlsNow when it leaves them.
     static hidePlayerControls() {
+        this.scheduleHide(1500);
+    }
+
+    static hidePlayerControlsNow() {
+        this.scheduleHide(0);
+    }
+
+    static scheduleHide(delay: number) {
         if (this.playerControlsTimer) {
             clearTimeout(this.playerControlsTimer);
         }
@@ -36,6 +46,6 @@ export class PlayerControls {
                 return;
             }
             element.style.opacity = "0";
-        }, 3000);
+        }, delay);
     }
 }

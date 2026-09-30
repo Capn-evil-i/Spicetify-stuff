@@ -307,10 +307,11 @@ export class ConfigManager {
         max: number,
         onChange: (value: number) => void,
         description = "",
+        step = 1,
     ) {
         const settingCard = getSettingCard(
             `<label class="range-setting-control">
-                <input type="range" min="${min}" max="${max}" step="1" value="${value}" aria-label="${title}">
+                <input type="range" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${title}">
                 <output class="range-setting-value">${value}%</output>
             </label>`,
             title,
@@ -458,6 +459,7 @@ export class ConfigManager {
                 100,
                 (value) => this.saveOption("hudPerspectiveStrength", value),
                 translations[LOCALE].settings.hudPerspectiveStrengthDescription,
+                10,
             ),
             this.createToggle(
                 translations[LOCALE].settings.hudPerspectiveBackground,

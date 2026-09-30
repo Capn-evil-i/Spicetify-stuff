@@ -15,7 +15,7 @@ const tvStyles = readFileSync(join(root, 'src', 'styles', 'tvMode.scss'), 'utf8'
 test('perspective strength sets the bend and compact layouts keep a gentler one', () => {
   assert.match(helper, /clamp\(Number\(value\) \|\| 0, 0, 100\)/);
   assert.match(helper, /window\.innerWidth <= 800 \? 0\.55 : 1/);
-  assert.match(helper, /const MAX_BEND = 0\.09;/);
+  assert.match(helper, /const MAX_BEND = 0\.18;/);
   assert.match(app, /setHudPerspectiveStrength\(DOM\.container, Number\(CFM\.get\("hudPerspectiveStrength"\)\)\)/);
   assert.match(config, /input\.oninput = \(\) =>[\s\S]*?setHudPerspectiveStrength\(DOM\.container, strength\)/);
   assert.match(baseStyles, /#fsd-hud-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?transform-style:\s*flat;/);
@@ -44,8 +44,13 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
   assert.match(helper, /const BLOCKS = \[[\s\S]*?LYRIC_LINES,\s*\]\.join/);
   assert.match(helper, /function splitWords\(\)/);
   assert.match(helper, /function joinWords\(\)/);
-  assert.match(tvStyles, /\.hud-perspective \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
-  assert.match(helper, /const BENT = \[\s*"#fsd-art",\s*"#fsd-progress-bar",\s*"#fsd_next_art",\s*"#fsd-ctx-icon",/);
+  assert.match(tvStyles, /\.hud-curving \{\s*fsd-curve-word \{\s*display: inline-block;\s*transform-origin: 0 0;/);
+  assert.match(helper, /const BENT = \[\s*"#fsd-progress-bar",\s*"#fsd_next_art",\s*"#fsd-ctx-icon",/);
+  // The artwork frame only moves; its picture bends and zooms inside it.
+  assert.match(helper, /function placeArt\(/);
+  assert.match(tvStyles, /#fsd-art-image::after \{[\s\S]*?transform: matrix\(1, var\(--fsd-art-shear, 0\), 0, var\(--fsd-art-tall, 1\), 0, 0\) scale\(var\(--fsd-art-zoom, 1\)\);/);
+  // The bend eases instead of snapping.
+  assert.match(helper, /bend \+= \(targetBend - bend\) \* \(1 - Math\.exp\(-elapsed \/ EASE_MS\)\);/);
   assert.doesNotMatch(helper, /"#fsd-perspective-container > \*"/, 'the slider is not bent under the pointer');
   // The HUD layer itself is never transformed or filtered, so clicks land where things are drawn.
   assert.doesNotMatch(tvStyles, /#fsd-hud-layer\s*\{[^}]*(transform|filter|perspective):/);
@@ -55,7 +60,7 @@ test('the HUD bends like a screen curved inwards: rows arc, nothing stretches si
 test('the blurred background bends too, never from outside the image, and it can be turned off', () => {
   assert.match(helper, /feDisplacementMap/);
   assert.match(helper, /xChannelSelector="R" yChannelSelector="G"/);
-  assert.match(helper, /const lowest = 1 - bend;/);
+  assert.match(helper, /const lowest = 1 - backgroundBend;/);
   assert.match(helper, /CFM\.get\("hudPerspectiveBackground"\)/);
   assert.match(helper, /#fsd-background/);
 });

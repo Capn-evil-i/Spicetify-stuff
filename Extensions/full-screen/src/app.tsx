@@ -400,16 +400,31 @@ async function main() {
         }, 2000);
     }
 
+    // While the pointer is over the controls or the progress bar, their rows keep their width and
+    // the curve leaves them where they are, so a song change (a longer or shorter title) does not
+    // slide a button out from under the pointer. They settle into place once the pointer leaves.
+    function holdControls(hold: boolean) {
+        DOM.container.classList.toggle("controls-held", hold);
+        for (const row of DOM.container.querySelectorAll<HTMLElement>("#fsd-status, #fsd-progress-parent")) {
+            if (hold) row.style.width = `${row.offsetWidth}px`;
+            else row.style.removeProperty("width");
+        }
+    }
+
     function onStatusEnter() {
+        holdControls(true);
         if (PlayerControls.playerControlsTimer) clearTimeout(PlayerControls.playerControlsTimer);
         if (ExtraControls.extraControlsTimer) clearTimeout(ExtraControls.extraControlsTimer);
         const statusEl = DOM.container.querySelector<HTMLElement>("#fsd-status");
         statusEl?.querySelectorAll<HTMLElement>(".fsd-controls, .extra-controls").forEach((c) => (c.style.opacity = "1"));
     }
 
+    // Leaving the controls hides them straight away rather than after the idle timer.
     function onStatusLeave() {
-        if (CFM.get("playerControls") === "mousemove") PlayerControls.hidePlayerControls();
-        if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControls();
+        holdControls(false);
+        if (CFM.get("playerControls") === "mousemove") PlayerControls.hidePlayerControlsNow();
+        if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControlsNow();
+        document.dispatchEvent(new Event("fsd-controls-leave"));
         updateControlsCollapsed();
     }
 
@@ -464,6 +479,7 @@ async function main() {
     }
 
     function handleMouseMoveDeactivation() {
+        holdControls(false);
         controlsObserver.disconnect();
         DOM.container.classList.remove("controls-collapsed", "progress-collapsed");
         DOM.container.removeEventListener("mousemove", hideCursor);

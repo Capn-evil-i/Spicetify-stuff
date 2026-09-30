@@ -349,7 +349,7 @@
 // the curve (transforms need a box, not an inline run). Words and text blocks are sheared from
 // their top-left corner. Text blocks keep clipping for their line clamps, with a little room for
 // what their words bend past the block's own slope.
-#full-screen-display.hud-perspective {
+#full-screen-display.hud-curving {
     fsd-curve-word {
         display: inline-block;
         transform-origin: 0 0;
@@ -360,7 +360,6 @@
     #fsd-artist > span,
     #fsd-album > span,
     #fsd_up_next_text,
-    #fsd-art,
     #fsd-progress-bar,
     #fsd_next_art,
     #fsd-ctx-icon,
@@ -370,6 +369,21 @@
     #fsd-elapsed,
     #fsd-duration {
         transform-origin: 0 0;
+    }
+
+    // The artwork's frame stays square-on; this layer is the picture, bent and zoomed inside it
+    // (the frame clips it to its rounded corners). The variables are set by hud-perspective.ts.
+    #fsd-art-image::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background-image: var(--fsd-art-url);
+        background-size: cover;
+        background-position: center;
+        transform: matrix(1, var(--fsd-art-shear, 0), 0, var(--fsd-art-tall, 1), 0, 0) scale(var(--fsd-art-zoom, 1));
+        transition: background-image 0.4s ease;
+        pointer-events: none;
     }
 
     // Link underlines cannot reach into the word boxes and would only mark the spaces between

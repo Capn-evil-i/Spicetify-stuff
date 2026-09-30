@@ -63,7 +63,7 @@ const SeekableProgressBar = ({ state }: { state: string }) => {
         }
     };
 
-    const hideProgressBar = (timeout = 3000) => {
+    const hideProgressBar = (timeout = 1500) => {
         if (progressTimer.current) {
             clearTimeout(progressTimer.current);
         }
@@ -135,10 +135,16 @@ const SeekableProgressBar = ({ state }: { state: string }) => {
 
         Spicetify.Player.addEventListener("songchange", updateDuration);
         setDragListener();
+        // The pointer left the controls: hide straight away instead of waiting for the idle timer.
+        const onControlsLeave = () => {
+            if (state === "mousemove" && !changingProgress.isChanging) hideProgressBar(0);
+        };
+        document.addEventListener("fsd-controls-leave", onControlsLeave);
         return () => {
             // console.log("Progress Effect cleared");
             clearInterval(updateInterval);
             Spicetify.Player.removeEventListener("songchange", updateDuration);
+            document.removeEventListener("fsd-controls-leave", onControlsLeave);
             resetDragListener();
         };
     }, [changingProgress, state]);

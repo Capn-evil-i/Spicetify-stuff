@@ -463,13 +463,23 @@
         text-shadow: 0 0 3px var(--fsd-glow-highlight), 0 0 12px var(--fsd-glow-color);
         transition: text-shadow 0.3s ease;
     }
-    // In TV mode the title's inner span uses line clamping. Render its glow
-    // after that clipping step so the halo can extend past the text box.
+    // In TV mode the title's inner span uses line clamping. Render its glow as a filter on that span:
+    // a filter is drawn after the span's own clipping, so the halo can extend past the text box. It
+    // sits on the text, not the whole row, so the icon beside it keeps its own-colour glow.
     &[mode="tv"].glow-title #fsd-title {
         text-shadow: none;
-        filter: drop-shadow(0 0 3px var(--fsd-glow-highlight))
-            drop-shadow(0 0 12px var(--fsd-glow-color));
-        transition: filter 0.3s ease;
+
+        > span {
+            filter: drop-shadow(0 0 3px var(--fsd-glow-highlight))
+                drop-shadow(0 0 12px var(--fsd-glow-color));
+            transition: filter 0.3s ease;
+        }
+    }
+    // The icons beside the title and details glow in their own colour, like the controls.
+    &.glow-title #fsd-title > svg,
+    &.glow-details #fsd-artist > svg,
+    &.glow-details #fsd-album > svg {
+        filter: drop-shadow(0 0 2px var(--fsd-own-glow)) drop-shadow(0 0 8px var(--fsd-own-glow));
     }
     &:not(.glow-title) #fsd-title {
         text-shadow: none !important;
@@ -491,19 +501,24 @@
             transition: text-shadow 0.3s ease;
         }
 
+        // The context icon is always drawn in the primary colour, so it glows in that.
         #fsd-ctx-icon {
-            filter:
-                drop-shadow(0 0 3px var(--fsd-glow-highlight))
-                drop-shadow(0 0 12px var(--fsd-glow-color));
+            --fsd-ctx-glow: color-mix(in srgb, var(--primary-color) 70%, transparent);
+            filter: drop-shadow(0 0 2px var(--fsd-ctx-glow)) drop-shadow(0 0 8px var(--fsd-ctx-glow));
             transition: filter 0.3s ease;
         }
     }
-    // The metadata spans and context details are clipped for line wrapping.
-    // A filter on their outer elements keeps the text bounds while drawing
-    // the halo beyond those bounds.
+    // The metadata spans and context details are clipped for line wrapping. A filter on the
+    // clipped text itself draws the halo beyond those bounds, and leaves the icons beside it to
+    // their own-colour glow.
     &[mode="tv"].glow-details {
         #fsd-artist,
-        #fsd-album,
+        #fsd-album {
+            text-shadow: none;
+        }
+
+        #fsd-artist > span,
+        #fsd-album > span,
         #fsd-ctx-details {
             text-shadow: none;
             filter: drop-shadow(0 0 3px var(--fsd-glow-highlight))

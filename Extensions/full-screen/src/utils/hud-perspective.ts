@@ -12,19 +12,25 @@ import CFM from "./config";
 // middle. The arc is level in the middle (no sharp point) and keeps getting steeper all the way
 // out to the edges, like a curved screen, rather than flattening off near them.
 //
-// Nothing on the HUD is resampled (that aliases edges and text). Every word, the artwork and the
-// progress bar are sheared and scaled vertically to their slice of the arc: upright edges stay
-// upright and horizontal ones follow the curve. Text blocks are sheared as a whole first, so their
+// Nothing on the HUD is resampled (that aliases edges and text). Every word, icon and the progress
+// bar are sheared and scaled vertically to their slice of the arc: upright edges stay upright and
+// horizontal ones follow the curve. The artwork's frame only moves; the picture bends and zooms
+// inside it, so the frame never hangs off at an angle. Changing the strength or switching the
+// effect eases the bend in and out instead of snapping. Text blocks are sheared as a whole first, so their
 // clipping boxes follow the curve with their words. Buttons and icons move with the curve. Lyric
 // lines stay where lyrics-plus puts them and their words bend around each line's middle, so the
 // lyrics keep their usual height on screen. Only the blurred background is bent as an image.
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 0.09 matches
-// the user's terminal wallpaper (Wallpaper Engine), measured from how steeply its corner panels
-// slant toward the middle.
-const MAX_BEND = 0.09;
+// At 100% strength the middle of the screen is drawn MAX_BEND closer to the midline. 50% (0.09)
+// matches the user's terminal wallpaper (Wallpaper Engine), measured from how steeply its corner
+// panels slant toward the middle.
+const MAX_BEND = 0.18;
+// How quickly the bend follows a change of strength (time constant, ms).
+const EASE_MS = 120;
+// Set while the curve is drawn, including while it eases out; the curve's CSS keys off it.
+const CURVING = "hud-curving";
 
 const LYRIC_LINES = "#fad-lyrics-plus-container .lyrics-lyricsContainer-LyricsLine";
 // Text blocks bend as a whole and their words bend inside them. Lyric lines are placed by
@@ -48,10 +54,9 @@ const PIECES = [
     "#fsd-volume-container > *",
     "#fsd-overview-card > *",
 ].join(", ");
-// Images, icons and shapes without a transform of their own: sheared like words, so they bend
-// with the curve too (the disc icon, the artwork, the progress bar and its times).
+// Icons and shapes without a transform of their own: sheared like words, so they bend with the
+// curve too (the disc icon, the progress bar and its times).
 const BENT = [
-    "#fsd-art",
     "#fsd-progress-bar",
     "#fsd_next_art",
     "#fsd-ctx-icon",
@@ -61,9 +66,13 @@ const BENT = [
     "#fsd-elapsed",
     "#fsd-duration",
 ].join(", ");
+// The artwork's frame moves with the curve; its picture (a layer drawn by CSS) bends inside it.
+const ART = "#fsd-art";
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
 const DEFS = "fsd-curve-defs";
+// Rows the curve leaves alone while the pointer is over them (app.tsx sets controls-held).
+const HELD = "#fsd-status, #fsd-progress-parent";
 
 // A sheared box: its top-left corner is lifted by `lift` screen px and each px to the right is
 // lifted `shear` px more.
@@ -73,7 +82,11 @@ type Flat = { left: number; top: number; width: number; height: number; scale: n
 // A piece moved as a whole: vertical offset and vertical scale about its transform origin.
 type Move = { dy: number; tall: number };
 
+// The bend drawn now, the one it is easing toward, and the one the background was last built for.
 let bend = 0;
+let targetBend = 0;
+let backgroundBend = 0;
+let lastTime = 0;
 let margins = { left: 0, right: 0 };
 let container: HTMLElement | null = null;
 let frame = 0;
@@ -86,22 +99,18 @@ export function setHudPerspectiveStrength(element: HTMLElement, value: number) {
     container = element;
     const normalized = clamp(Number(value) || 0, 0, 100) / 100;
     const compactScale = window.innerWidth <= 800 ? 0.55 : 1;
-    bend = MAX_BEND * normalized * compactScale;
-    if (active()) start();
+    const enabled = element.classList.contains("hud-perspective");
+    targetBend = enabled ? MAX_BEND * normalized * compactScale : 0;
+    if (shown() && (targetBend > 0 || bend > 0)) start();
     else stop();
-    updateBackground();
 }
 
-function active() {
-    return Boolean(
-        container?.isConnected &&
-            container.classList.contains("hud-perspective") &&
-            document.body.classList.contains("fsd-activated") &&
-            bend > 0,
-    );
+function shown() {
+    return Boolean(container?.isConnected && document.body.classList.contains("fsd-activated"));
 }
 
 function start() {
+    container?.classList.add(CURVING);
     splitWords();
     if (!textObserver && container) {
         // Song changes replace the text and lyric lines; split the new words as they arrive.
@@ -111,17 +120,24 @@ function start() {
         });
         textObserver.observe(container, { childList: true, characterData: true, subtree: true });
     }
-    if (!frame) frame = requestAnimationFrame(tick);
+    if (!frame) {
+        lastTime = performance.now();
+        frame = requestAnimationFrame(tick);
+    }
 }
 
 function stop() {
     if (frame) cancelAnimationFrame(frame);
     frame = 0;
+    bend = 0;
     textObserver?.disconnect();
     textObserver = null;
+    updateBackground();
     if (!container) return;
-    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}`)) reset(element);
+    for (const element of container.querySelectorAll<HTMLElement>(`${BLOCKS}, ${WORD}, ${PIECES}, ${BENT}, ${ART}`)) reset(element);
+    for (const name of ["--fsd-art-shear", "--fsd-art-tall", "--fsd-art-zoom"]) container.style.removeProperty(name);
     joinWords();
+    container.classList.remove(CURVING);
 }
 
 function reset(element: HTMLElement) {
@@ -142,8 +158,8 @@ function depthAt(x: number) {
 }
 
 // h(x): how far the screen at x is drawn from the midline, relative to flat.
-function heightAt(x: number) {
-    return 1 - bend * depthAt(x).depth;
+function heightAt(x: number, k = bend) {
+    return 1 - k * depthAt(x).depth;
 }
 
 // dh/dx.
@@ -162,13 +178,23 @@ function onScreen(box: Flat) {
 // own last lift plus whatever its block's shear and lift did at that point.
 function shearedFlat(element: HTMLElement, parent: Shear | null, parentLeft: number): Flat | null {
     const box = element.getBoundingClientRect();
-    if (!box.width || !box.height || !element.offsetWidth) return null;
+    const [layoutWidth, layoutHeight] = layoutSize(element);
+    if (!box.width || !box.height || !layoutWidth) return null;
     const last = sheared.get(element) ?? { shear: 0, lift: 0 };
-    const scale = box.width / element.offsetWidth;
+    const scale = box.width / layoutWidth;
     const shear = last.shear + (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (box.left - parentLeft) : 0;
     const top = box.top - Math.min(0, shear * box.width) - last.lift - parentLift;
-    return { left: box.left, top, width: box.width, height: element.offsetHeight * scale, scale };
+    return { left: box.left, top, width: box.width, height: layoutHeight * scale, scale };
+}
+
+// An element's untransformed size. SVG icons have no offsetWidth/offsetHeight, so theirs is read
+// from their CSS box instead (they would otherwise be skipped and stay put while the text beside
+// them follows the curve).
+function layoutSize(element: Element): [number, number] {
+    if (element instanceof HTMLElement) return [element.offsetWidth, element.offsetHeight];
+    const style = getComputedStyle(element);
+    return [parseFloat(style.width) || 0, parseFloat(style.height) || 0];
 }
 
 // A piece's flat layout: undoes its last vertical move and scale about its transform origin.
@@ -176,7 +202,8 @@ function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
     const box = element.getBoundingClientRect();
     if (!box.width || !box.height) return null;
     const last = moved.get(element) ?? { dy: 0, tall: 1 };
-    const scale = element.offsetWidth ? box.width / element.offsetWidth : 1;
+    const layoutWidth = layoutSize(element)[0];
+    const scale = layoutWidth ? box.width / layoutWidth : 1;
     const originY = (parseFloat(getComputedStyle(element).transformOrigin.split(" ")[1]) || 0) * scale;
     const top = box.top - last.dy - originY * (1 - last.tall);
     return { left: box.left, top, width: box.width, height: box.height / last.tall, scale, origin: originY };
@@ -222,10 +249,10 @@ function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, paren
 }
 
 // Moves a piece so its centre lands on the curve, scaled to the curve's height there.
-function placePiece(piece: HTMLElement, flat: Flat & { origin: number }): Move {
+function placePiece(piece: HTMLElement, flat: Flat & { origin: number }, scaleIt = true): Move {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const tall = heightAt(cx);
+    const tall = scaleIt ? heightAt(cx) : 1;
     const origin = flat.top + flat.origin;
     const dy = curveY(cx, cy) - origin - tall * (cy - origin);
     const move = { dy, tall };
@@ -256,11 +283,18 @@ function updateMargins(elements: HTMLElement[], flats: (Flat | null)[]) {
 
 // Lays every piece out on the curve. Pieces keep moving (lyrics scroll, controls collapse), so
 // this runs each frame while the effect is on and only writes styles that changed.
-function tick() {
+function tick(now: number) {
     frame = 0;
-    if (!active() || !container) {
+    if (!shown() || !container) {
         stop();
-        updateBackground();
+        return;
+    }
+    const elapsed = Math.min(100, Math.max(0, now - lastTime));
+    lastTime = now;
+    bend += (targetBend - bend) * (1 - Math.exp(-elapsed / EASE_MS));
+    if (Math.abs(targetBend - bend) < 0.0005) bend = targetBend;
+    if (bend === 0 && targetBend === 0) {
+        stop();
         return;
     }
     const blocks = Array.from(container.querySelectorAll<HTMLElement>(BLOCKS));
@@ -281,9 +315,17 @@ function tick() {
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
     const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
+    const art = container.querySelector<HTMLElement>(ART);
+    const artFlat = art ? movedFlat(art) : null;
     const previousMargins = margins.left;
-    updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
-    if (Math.round(previousMargins) !== Math.round(margins.left)) updateBackground();
+    updateMargins(
+        [...pieces, ...bent, ...blocks, ...(art ? [art] : [])],
+        [...pieceFlats, ...bentFlats, ...blockFlats, ...(artFlat ? [artFlat] : [])],
+    );
+    // The background is rebuilt in 0.01 steps of bend, so easing does not rebuild it every frame.
+    if (Math.round(previousMargins) !== Math.round(margins.left) || Math.abs(bend - backgroundBend) >= 0.01 || bend === targetBend) {
+        updateBackground();
+    }
 
     // Lyric lines are left where lyrics-plus puts them; their words bend around the line's middle.
     const blockNow = new Map<Element, Shear>();
@@ -306,9 +348,10 @@ function tick() {
         const pin = (block && linePin.get(block)) || 0;
         placeSheared(word, flat, (block && blockNow.get(block)) || null, blockFlat?.left ?? 0, pin);
     });
+    const held = container.classList.contains("controls-held");
     pieces.forEach((piece, i) => {
         const flat = pieceFlats[i];
-        if (!flat) return;
+        if (!flat || (held && piece.closest(HELD))) return;
         if (!onScreen(flat)) {
             if (moved.has(piece)) reset(piece);
             return;
@@ -317,14 +360,32 @@ function tick() {
     });
     bent.forEach((element, i) => {
         const flat = bentFlats[i];
-        if (!flat) return;
+        if (!flat || (held && element.closest(HELD))) return;
         if (!onScreen(flat)) {
             if (sheared.has(element)) reset(element);
             return;
         }
         placeSheared(element, flat, null, 0);
     });
+    if (art && artFlat && onScreen(artFlat)) placeArt(art, artFlat);
     frame = requestAnimationFrame(tick);
+}
+
+// The artwork's frame moves so its centre sits on the curve but stays square-on; the picture
+// inside takes the curve's slope and height there and zooms just enough to still fill the frame.
+function placeArt(art: HTMLElement, flat: Flat & { origin: number }) {
+    placePiece(art, flat, false);
+    const cx = flat.left + flat.width / 2;
+    const cy = flat.top + flat.height / 2;
+    const shear = (cy - midline()) * heightSlopeAt(cx);
+    const tall = heightAt(cx);
+    const zoom = (flat.height + Math.abs(shear) * flat.width) / (tall * flat.height);
+    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${zoom.toFixed(3)}`;
+    if (written.get(container!) === key) return;
+    written.set(container!, key);
+    container!.style.setProperty("--fsd-art-shear", shear.toFixed(4));
+    container!.style.setProperty("--fsd-art-tall", tall.toFixed(3));
+    container!.style.setProperty("--fsd-art-zoom", zoom.toFixed(3));
 }
 
 function defs() {
@@ -383,7 +444,12 @@ function verticalShiftFilter(
     filter.setAttribute("color-interpolation-filters", "sRGB");
     filter.innerHTML =
         `<feImage href="${canvas.toDataURL()}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none" result="map"/>` +
-        `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G"/>`;
+        `<feDisplacementMap in="SourceGraphic" in2="map" scale="${range}" xChannelSelector="R" yChannelSelector="G" result="bent"/>` +
+        // 8 bits cannot say "no shift" exactly (128/255 is a fifth of a pixel past centre), so where
+        // the bend is zero the last row and column sample just past the image and come out
+        // transparent (a thin grey line along the bottom middle). The bent image is laid over
+        // the original so those slivers show the picture instead.
+        `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="bent"/></feMerge>`;
     return filter;
 }
 
@@ -433,7 +499,8 @@ function joinWords() {
 function updateBackground() {
     const canvas = container?.querySelector<HTMLCanvasElement>("#fsd-background");
     if (!canvas) return;
-    if (!active() || !CFM.get("hudPerspectiveBackground")) {
+    backgroundBend = Math.round(bend * 100) / 100;
+    if (!shown() || backgroundBend === 0 || !CFM.get("hudPerspectiveBackground")) {
         canvas.style.removeProperty("filter");
         document.querySelectorAll(`#${DEFS} .fsd-background-curve`).forEach((filter) => filter.remove());
         return;
@@ -445,14 +512,14 @@ function updateBackground() {
     if (!width || !height || !box.width || !box.height) return;
     const scaleX = box.width / width;
     const scaleY = box.height / height;
-    const place = [bend * 1000, margins.left, box.left, box.top, box.width, box.height].map(Math.round).join("-");
+    const place = [backgroundBend * 1000, margins.left, box.left, box.top, box.width, box.height].map(Math.round).join("-");
     const id = `fsd-background-curve-${place}-${width}x${height}`;
     if (!document.getElementById(id)) {
         document.querySelectorAll(`#${DEFS} .fsd-background-curve`).forEach((filter) => filter.remove());
-        const lowest = 1 - bend;
+        const lowest = 1 - backgroundBend;
         const shift = (x: number, y: number) => {
             const drawnY = box.top + y * scaleY;
-            const flatY = midline() + ((drawnY - midline()) * lowest) / heightAt(box.left + x * scaleX);
+            const flatY = midline() + ((drawnY - midline()) * lowest) / heightAt(box.left + x * scaleX, backgroundBend);
             return (flatY - box.top) / scaleY - y;
         };
         defs().appendChild(verticalShiftFilter(id, 0, 0, width, height, shift, "fsd-background-curve"));

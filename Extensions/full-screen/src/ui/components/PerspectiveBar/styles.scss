@@ -9,19 +9,16 @@
     gap: 6px;
     color: var(--primary-color);
     z-index: 50;
-    transition:
-        transform 0.6s var(--transition-function),
-        opacity 0.6s var(--transition-function);
+    // Shows and hides the way the smart volume bar does, coming in from the bottom edge.
+    transition: transform 0.6s var(--transition-function);
 
     &.p-hidden {
-        transform: translateY(60px);
-        opacity: 0;
+        transform: translateY(100px) scale(0.1);
     }
 
     &.dragging,
     &:hover {
-        transform: translateY(0);
-        opacity: 1;
+        transform: translateY(0) scale(1);
     }
 
     #fsd-perspective-header {

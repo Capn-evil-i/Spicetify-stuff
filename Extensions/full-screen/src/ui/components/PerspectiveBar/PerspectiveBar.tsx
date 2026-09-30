@@ -34,9 +34,10 @@ const PerspectiveBar = () => {
         setHudPerspectiveStrength(DOM.container, active ? strength : 0);
     };
 
+    // Snaps to 10% steps.
     const valueAt = (clientX: number) => {
         const bounds = track.current!.getBoundingClientRect();
-        return Math.round(clamp((clientX - bounds.left) / bounds.width) * 100);
+        return Math.round(clamp((clientX - bounds.left) / bounds.width) * 10) * 10;
     };
 
     const onPointerDown = (evt: React.PointerEvent<HTMLDivElement>) => {

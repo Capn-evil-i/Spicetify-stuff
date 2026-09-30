@@ -85,7 +85,16 @@ export class ExtraControls {
         localStorage.setItem("full-screen:inverted", JSON.stringify(this.INVERTED));
     }
 
+    // Used as a mousemove listener, so it takes no delay argument (see PlayerControls).
     static hideExtraControls() {
+        this.scheduleHide(1500);
+    }
+
+    static hideExtraControlsNow() {
+        this.scheduleHide(0);
+    }
+
+    static scheduleHide(delay: number) {
         if (this.extraControlsTimer) {
             clearTimeout(this.extraControlsTimer);
         }
@@ -104,6 +113,6 @@ export class ExtraControls {
                 if (el.matches(":hover")) return;
             }
             elements.forEach((element) => (element.style.opacity = "0"));
-        }, 3000);
+        }, delay);
     }
 }

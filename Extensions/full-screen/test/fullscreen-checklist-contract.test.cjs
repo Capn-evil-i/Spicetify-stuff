@@ -15,7 +15,7 @@ test('perspective works in every fullscreen mode, not only TV', () => {
   assert.match(config, /classList\.toggle\("hud-perspective", Boolean\(CFM\.get\("hudPerspective"\)\)\)/);
   assert.doesNotMatch(app, /if \(CFM\.getMode\(\) === "tv"\) \{\s*ReactDOM\.render\(<PerspectiveBar/);
   assert.doesNotMatch(config, /CFM\.getMode\(\) === "tv"\s*\?\s*\[\s*this\.createToggle\(\s*translations\[LOCALE\]\.settings\.hudPerspective,/);
-  assert.match(tvStyles, /^#full-screen-display\.hud-perspective \{/m);
+  assert.match(tvStyles, /^#full-screen-display\.hud-curving \{/m);
 });
 
 test('the buttons row and the progress bar collapse on their own, in every mode', () => {
@@ -40,4 +40,38 @@ test('lyrics fade at their edges and their buttons sit in the corner, in every m
 
 test('split words underline themselves instead of underlining the spaces between them', () => {
   assert.match(tvStyles, /\.fsd-song-meta span:hover,\s*\.fsd-artist-list span:hover \{\s*text-decoration: none;\s*fsd-curve-word \{\s*text-decoration: underline;/);
+});
+
+test('title and detail icons glow in their own colour, not the text\'s white halo', () => {
+  assert.match(baseStyles, /&\.glow-title #fsd-title > svg,\s*&\.glow-details #fsd-artist > svg,\s*&\.glow-details #fsd-album > svg \{\s*filter: drop-shadow\(0 0 2px var\(--fsd-own-glow\)\)/);
+  // In TV mode the text's halo is on the clipped text, not the row holding the icon.
+  assert.match(baseStyles, /&\[mode="tv"\]\.glow-title #fsd-title \{\s*text-shadow: none;\s*> span \{\s*filter: drop-shadow/);
+  assert.match(baseStyles, /#fsd-artist > span,\s*#fsd-album > span,\s*#fsd-ctx-details \{\s*text-shadow: none;\s*filter: drop-shadow/);
+});
+
+test('controls under the pointer hold still through a song change', () => {
+  const helper = read('utils', 'hud-perspective.ts');
+  assert.match(app, /function holdControls\(hold: boolean\)[\s\S]*?row\.style\.width = `\$\{row\.offsetWidth\}px`/);
+  assert.match(app, /function onStatusEnter\(\) \{\s*holdControls\(true\);/);
+  assert.match(app, /function onStatusLeave\(\) \{\s*holdControls\(false\);/);
+  assert.match(helper, /if \(!flat \|\| \(held && piece\.closest\(HELD\)\)\) return;/);
+});
+
+test('the perspective slider snaps to 10% steps and moves like the smart volume bar', () => {
+  const bar = read('ui', 'components', 'PerspectiveBar', 'PerspectiveBar.tsx');
+  const barStyles = read('ui', 'components', 'PerspectiveBar', 'styles.scss');
+  assert.match(bar, /Math\.round\(clamp\(\(clientX - bounds\.left\) \/ bounds\.width\) \* 10\) \* 10/);
+  assert.match(barStyles, /&\.p-hidden \{\s*transform: translateY\(100px\) scale\(0\.1\);/);
+  assert.match(config, /hudPerspectiveStrengthDescription,\s*10,/);
+});
+
+test('controls hide as soon as the pointer leaves them, and 1.5s after the mouse stops', () => {
+  const player = read('ui', 'components', 'PlayerControls', 'PlayerControls.ts');
+  const extra = read('ui', 'components', 'ExtraControls', 'ExtraControls.ts');
+  const progress = read('ui', 'components', 'ProgressBar', 'ProgressBar.tsx');
+  assert.match(app, /function onStatusLeave\(\) \{[\s\S]*?PlayerControls\.hidePlayerControlsNow\(\);[\s\S]*?ExtraControls\.hideExtraControlsNow\(\);[\s\S]*?new Event\("fsd-controls-leave"\)/);
+  assert.match(player, /static hidePlayerControls\(\) \{\s*this\.scheduleHide\(1500\);/);
+  assert.match(extra, /static hideExtraControls\(\) \{\s*this\.scheduleHide\(1500\);/);
+  assert.match(progress, /const hideProgressBar = \(timeout = 1500\) =>/);
+  assert.match(progress, /document\.addEventListener\("fsd-controls-leave", onControlsLeave\)/);
 });
