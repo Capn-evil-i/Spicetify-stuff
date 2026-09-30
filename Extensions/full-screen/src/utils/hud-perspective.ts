@@ -70,6 +70,12 @@ const BENT = [
 // The HUD's side margins are read from these, which only move when the layout does.
 const LEFT_EDGE = "#fsd-ctx-icon, #fsd-art";
 const DEFS = "fsd-curve-defs";
+// Each cluster of the HUD bends as one curved panel: everything in it is bent by the curve at the
+// cluster's middle height, so its rows keep their spacing and letters keep their height (bending
+// each row by its own height squashed text and crowded rows at high strength). Lyric lines are
+// their own panels.
+const GROUPS = "#fsd-foreground, #fsd-ctx-container, #fsd-upnext-container, #fsd-volume-container, #fsd-overview-card";
+let groupRefs = new Map<Element, number>();
 // Rows the curve leaves alone while the pointer is over them (app.tsx sets controls-held).
 const HELD = "#fsd-status, #fsd-progress-parent";
 
@@ -166,7 +172,11 @@ function heightSlopeAt(x: number) {
 }
 
 const midline = () => window.innerHeight / 2;
-const curveY = (x: number, y: number) => midline() + (y - midline()) * heightAt(x);
+// The height a piece is bent at: its panel's middle, or its own middle outside any panel.
+function refFor(element: Element, ownY: number) {
+    const group = element.closest(`${GROUPS}, ${LYRIC_LINES}`);
+    return (group && groupRefs.get(group)) ?? ownY;
+}
 
 function onScreen(box: Flat) {
     return box.left + box.width > 0 && box.left < window.innerWidth && box.top + box.height > 0 && box.top < window.innerHeight;
@@ -208,14 +218,16 @@ function movedFlat(element: HTMLElement): (Flat & { origin: number }) | null {
 }
 
 // How far the curve moves a point vertically.
-const liftAt = (x: number, y: number) => curveY(x, y) - y;
+// How far the curve moves a panel whose middle is at height `ref`, at x.
+const liftAt = (x: number, ref: number) => (ref - midline()) * (heightAt(x) - 1);
 
 // Shears a text block so its centre lands on the curve and its slope follows the curve there.
 function placeBlock(block: HTMLElement, flat: Flat): Shear {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const shear = (cy - midline()) * heightSlopeAt(cx);
-    const lift = liftAt(cx, cy) - shear * (flat.width / 2);
+    const ref = refFor(block, cy);
+    const shear = (ref - midline()) * heightSlopeAt(cx);
+    const lift = liftAt(cx, ref) - shear * (flat.width / 2);
     sheared.set(block, { shear, lift });
     const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(block) !== key) {
@@ -245,48 +257,45 @@ function centredFlat(button: HTMLElement): Flat | null {
 function placeCentred(button: HTMLElement, flat: Flat) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const shear = (cy - midline()) * heightSlopeAt(cx);
-    const tall = heightAt(cx);
-    const lift = liftAt(cx, cy);
+    const ref = refFor(button, cy);
+    const shear = (ref - midline()) * heightSlopeAt(cx);
+    const lift = liftAt(cx, ref);
     sheared.set(button, { shear, lift });
-    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${lift.toFixed(1)}`;
+    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(button) !== key) {
         written.set(button, key);
-        button.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, ${tall.toFixed(3)}, 0, ${(lift / flat.scale).toFixed(2)})`;
+        button.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
     }
 }
 
 function placeSheared(word: HTMLElement, flat: Flat, parent: Shear | null, parentLeft: number, pin = 0) {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const totalShear = (cy - midline()) * heightSlopeAt(cx);
-    const tall = heightAt(cx);
-    const targetTop = cy + liftAt(cx, cy) - pin - totalShear * (flat.width / 2) - tall * (flat.height / 2);
+    const ref = refFor(word, cy);
+    const totalShear = (ref - midline()) * heightSlopeAt(cx);
+    const targetTop = cy + liftAt(cx, ref) - pin - totalShear * (flat.width / 2) - flat.height / 2;
     const shear = totalShear - (parent?.shear ?? 0);
     const parentLift = parent ? parent.lift + parent.shear * (flat.left - parentLeft) : 0;
     const lift = targetTop - flat.top - parentLift;
     sheared.set(word, { shear, lift });
-    const key = `${shear.toFixed(4)}|${tall.toFixed(3)}|${lift.toFixed(1)}`;
+    const key = `${shear.toFixed(4)}|${lift.toFixed(1)}`;
     if (written.get(word) !== key) {
         written.set(word, key);
-        word.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, ${tall.toFixed(3)}, 0, ${(lift / flat.scale).toFixed(2)})`;
+        word.style.transform = `matrix(1, ${shear.toFixed(4)}, 0, 1, 0, ${(lift / flat.scale).toFixed(2)})`;
     }
 }
 
-// Moves a piece so its centre lands on the curve, scaled to the curve's height there.
-function placePiece(piece: HTMLElement, flat: Flat & { origin: number }, scaleIt = true): Move {
+// Moves a piece so its centre lands on the curve (its panel's curve).
+function placePiece(piece: HTMLElement, flat: Flat & { origin: number }): Move {
     const cx = flat.left + flat.width / 2;
     const cy = flat.top + flat.height / 2;
-    const tall = scaleIt ? heightAt(cx) : 1;
-    const origin = flat.top + flat.origin;
-    const dy = curveY(cx, cy) - origin - tall * (cy - origin);
-    const move = { dy, tall };
+    const dy = liftAt(cx, refFor(piece, cy));
+    const move = { dy, tall: 1 };
     moved.set(piece, move);
-    const key = `${dy.toFixed(1)}|${tall.toFixed(3)}`;
+    const key = dy.toFixed(1);
     if (written.get(piece) !== key) {
         written.set(piece, key);
         piece.style.translate = `0 ${dy.toFixed(1)}px`;
-        piece.style.scale = `1 ${tall.toFixed(3)}`;
     }
     return move;
 }
@@ -339,6 +348,15 @@ function tick(now: number) {
         return shearedFlat(word, (block && sheared.get(block)) || null, flat?.left ?? 0);
     });
     const pieceFlats = pieces.map((piece) => movedFlat(piece));
+    groupRefs = new Map();
+    for (const group of container.querySelectorAll(GROUPS)) {
+        const box = group.getBoundingClientRect();
+        if (box.height) groupRefs.set(group, (box.top + box.bottom) / 2);
+    }
+    blocks.forEach((block, i) => {
+        const flat = blockFlats[i];
+        if (flat && block.matches(LYRIC_LINES)) groupRefs.set(block, flat.top + flat.height / 2);
+    });
     const bentFlats = bent.map((element) => shearedFlat(element, null, 0));
     const previousMargins = margins.left;
     updateMargins([...pieces, ...bent, ...blocks], [...pieceFlats, ...bentFlats, ...blockFlats]);
@@ -354,7 +372,7 @@ function tick(now: number) {
         const flat = blockFlats[i];
         if (!flat || !onScreen(flat)) return;
         if (block.matches(LYRIC_LINES)) {
-            linePin.set(block, liftAt(flat.left + flat.width / 2, flat.top + flat.height / 2));
+            linePin.set(block, liftAt(flat.left + flat.width / 2, refFor(block, flat.top + flat.height / 2)));
             blockNow.set(block, { shear: 0, lift: 0 });
         } else {
             blockNow.set(block, placeBlock(block, flat));
