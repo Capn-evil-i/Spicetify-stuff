@@ -52,7 +52,8 @@ test('title and detail icons glow in their own colour, not the text\'s white hal
 test('controls under the pointer hold still through a song change', () => {
   const helper = read('utils', 'hud-perspective.ts');
   assert.match(app, /function holdControls\(hold: boolean\)[\s\S]*?row\.style\.width = `\$\{row\.offsetWidth\}px`/);
-  assert.match(app, /function onStatusEnter\(\) \{\s*holdControls\(true\);/);
+  assert.match(app, /function onStatusEnter\(\) \{[\s\S]*?holdWhenSettled\(\);\s*\}/);
+  assert.match(app, /function holdWhenSettled\(\) \{[\s\S]*?else if \(pointerOnRows\(\)\) holdControls\(true\);/);
   assert.match(app, /function onStatusLeave\(\) \{\s*holdControls\(false\);/);
   assert.match(helper, /if \(!flat \|\| \(held && piece\.closest\(HELD\)\)\) return;/);
 });
@@ -107,4 +108,16 @@ test('fade animations do not knock elements off the curve', () => {
 test('held control rows stay put on screen through a song change', () => {
   assert.match(app, /function keepRowsInPlace\(\)/);
   assert.match(app, /held\.row\.style\.translate = `\$\{x\.toFixed\(1\)\}px \$\{y\.toFixed\(1\)\}px`/);
+});
+
+test('reaching hidden controls shows them first and holds them where they are shown, not on the progress bar', () => {
+  const enter = app.slice(app.indexOf('function onStatusEnter()'), app.indexOf('function hideAfterIdle()'));
+  assert.ok(enter.indexOf('updateControlsCollapsed();') < enter.indexOf('holdWhenSettled();'));
+  assert.match(enter, /const settling = REVEAL_SETTLE_MS - \(performance\.now\(\) - revealedAt\);\s*if \(settling > 0\) holdTimer = setTimeout\(holdWhenSettled, settling\);/);
+  const collapse = app.slice(app.indexOf('function updateControlsCollapsed()'), app.indexOf('function handleMouseMoveActivation()'));
+  assert.match(collapse, /revealedAt = performance\.now\(\);/);
+  // Rows still growing back can slide out from under a still pointer: that falls back to the idle timer.
+  const leave = app.slice(app.indexOf('function onStatusLeave()'), app.indexOf('const controlsObserver'));
+  assert.match(leave, /if \(revealing\(\)\) \{\s*hideAfterIdle\(\);\s*holdWhenSettled\(\);\s*return;\s*\}/);
+  assert.ok(leave.indexOf('return;') < leave.indexOf('hidePlayerControlsNow'));
 });

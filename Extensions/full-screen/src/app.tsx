@@ -443,17 +443,48 @@ async function main() {
         holdFrame = requestAnimationFrame(keepRowsInPlace);
     }
 
+    // Showing collapsed rows (hidden after idling) grows them back over a short transition and the
+    // curve re-bends them. A collapsed row has no height, so the pointer usually enters it only once it
+    // has started growing. Holding then pinned the buttons partway, on top of the progress bar. While
+    // the rows grow they are not held, and one sliding out from under a still pointer is not treated
+    // as leaving; the hold starts once they are in place, if the pointer is still on them.
+    const REVEAL_SETTLE_MS = 400;
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let revealedAt = -Infinity;
+    const revealing = () => performance.now() - revealedAt < REVEAL_SETTLE_MS;
+    const pointerOnRows = () => Boolean(DOM.container.querySelector("#fsd-status:hover, #fsd-progress-parent:hover"));
+
     function onStatusEnter() {
-        holdControls(true);
         if (PlayerControls.playerControlsTimer) clearTimeout(PlayerControls.playerControlsTimer);
         if (ExtraControls.extraControlsTimer) clearTimeout(ExtraControls.extraControlsTimer);
         const statusEl = DOM.container.querySelector<HTMLElement>("#fsd-status");
         statusEl?.querySelectorAll<HTMLElement>(".fsd-controls, .extra-controls").forEach((c) => (c.style.opacity = "1"));
+        updateControlsCollapsed();
+        holdWhenSettled();
+    }
+
+    function holdWhenSettled() {
+        clearTimeout(holdTimer);
+        const settling = REVEAL_SETTLE_MS - (performance.now() - revealedAt);
+        if (settling > 0) holdTimer = setTimeout(holdWhenSettled, settling);
+        else if (pointerOnRows()) holdControls(true);
+        else hideAfterIdle();
+    }
+
+    function hideAfterIdle() {
+        if (CFM.get("playerControls") === "mousemove") PlayerControls.hidePlayerControls();
+        if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControls();
     }
 
     // Leaving the controls hides them straight away rather than after the idle timer.
     function onStatusLeave() {
         holdControls(false);
+        if (revealing()) {
+            hideAfterIdle();
+            holdWhenSettled();
+            return;
+        }
+        clearTimeout(holdTimer);
         if (CFM.get("playerControls") === "mousemove") PlayerControls.hidePlayerControlsNow();
         if (CFM.get("extraControls") === "mousemove") ExtraControls.hideExtraControlsNow();
         document.dispatchEvent(new Event("fsd-controls-leave"));
@@ -474,6 +505,9 @@ async function main() {
         const controlsHidden =
             !hovered && controls.length > 0 && Array.from(controls).every((row) => row.style.opacity === "0");
         const progressHidden = !hovered && Boolean(progress) && progress!.style.opacity === "0";
+        const list = DOM.container.classList;
+        if ((list.contains("controls-collapsed") && !controlsHidden) || (list.contains("progress-collapsed") && !progressHidden))
+            revealedAt = performance.now();
         DOM.container.classList.toggle("controls-collapsed", controlsHidden);
         DOM.container.classList.toggle("progress-collapsed", progressHidden);
     }
@@ -511,6 +545,7 @@ async function main() {
     }
 
     function handleMouseMoveDeactivation() {
+        clearTimeout(holdTimer);
         holdControls(false);
         controlsObserver.disconnect();
         DOM.container.classList.remove("controls-collapsed", "progress-collapsed");
